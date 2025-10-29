@@ -2,8 +2,8 @@
   <el-container style="height: 100vh;">
     <el-aside width="220px">
       <el-menu :default-active="$route.path" router>
-        <el-menu-item index="/equipment">設備管理</el-menu-item>
-        <el-menu-item index="/operation">操作管理</el-menu-item>
+        <el-menu-item index="/management_platform/equipment">設備管理</el-menu-item>
+        <el-menu-item index="/management_platform/operation">操作管理</el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
