@@ -27,14 +27,16 @@
                         <el-button icon="el-icon-setting">欄位設定</el-button>
                     </template>
                     <el-checkbox-group v-model="visibleColumns" class="col-setting">
-                        <el-checkbox v-for="col in allColumns" :key="col.prop" :label="col.prop">{{ col.label }}</el-checkbox>
+                        <el-checkbox v-for="col in allColumns" :key="col.prop" :label="col.prop">
+                            {{ col.label }}
+                        </el-checkbox>
                     </el-checkbox-group>
                 </el-popover>
             </el-form>
         </div>
 
         <!-- 資料表 -->
-        <el-table :data="filteredRows" border height="70vh">
+        <el-table :data="pagedRows" border height="70vh">
             <el-table-column type="index" label="序號" width="80" />
 
             <el-table-column v-if="visibleColumns.includes('timestamp')" prop="timestamp" label="時間" width="180" />
@@ -45,8 +47,12 @@
             <!-- NG 項 -->
             <el-table-column label="NG 項" width="160">
                 <template #default="{ row }">
-                    <span v-if="row.ng_items.length">{{ row.ng_items.join(', ') }}</span>
-                    <span v-else>-</span>
+                    <span v-if="row.ng_items.length">
+                        <el-tag v-for="item in row.ng_items" :key="item" type="danger" size="small">{{ item }}</el-tag>
+                    </span>
+                    <span v-else>
+                        <el-tag type="success" size="small">OK</el-tag>
+                    </span>
                 </template>
             </el-table-column>
 
@@ -66,15 +72,23 @@
             <el-table-column label="維修建議" prop="suggestion" width="160" />
             <el-table-column label="可能部位" prop="part" width="140" />
         </el-table>
+
+        <!-- 分頁 -->
+        <div style="text-align:center; margin-top:12px;">
+            <el-pagination background layout="prev, pager, next, sizes, total" :total="filteredRows.length"
+                v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[10, 20, 50, 100]" />
+        </div>
     </el-card>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
 
-// ------------------------------
+// 分頁控制
+const currentPage = ref(1)
+const pageSize = ref(20)
+
 // 篩選條件
-// ------------------------------
 const filters = ref({
     id: '',
     product_spec: '',
@@ -82,9 +96,7 @@ const filters = ref({
     status: '',
 })
 
-// ------------------------------
 // 模擬資料
-// ------------------------------
 const rows = ref([
     {
         id: 1,
@@ -112,9 +124,7 @@ const rows = ref([
     },
 ])
 
-// ------------------------------
 // 欄位設定
-// ------------------------------
 const testColumns = [
     { prop: 'M01', label: 'M01_低壓手動排水閥測試_測試結果' },
     { prop: 'M02', label: 'M02_高壓手動排水閥測試_測試結果' },
@@ -145,8 +155,7 @@ const allColumns = [
     ...leakColumns,
 ]
 
-
-const visibleColumns = ref(allColumns.map(c => c.prop)) // 預設全開
+const visibleColumns = ref(allColumns.map(c => c.prop))
 
 const visibleTestColumns = computed(() =>
     testColumns.filter(col => visibleColumns.value.includes(col.prop))
@@ -155,23 +164,26 @@ const visibleLeakColumns = computed(() =>
     leakColumns.filter(col => visibleColumns.value.includes(col.prop))
 )
 
-
-// ------------------------------
 // 篩選邏輯
-// ------------------------------
 const filteredRows = computed(() => {
     return rows.value.filter(r => {
         const matchId = filters.value.id ? String(r.id) === String(filters.value.id) : true
         const matchSpec = filters.value.product_spec
             ? r.product_spec.toLowerCase().includes(filters.value.product_spec.toLowerCase())
             : true
-        const matchStatus = filters.value.status ? r.status === filters.value.status : true
-        return matchId && matchSpec && matchStatus
+        return matchId && matchSpec
     })
 })
 
+// 分頁處理
+const pagedRows = computed(() => {
+    const start = (currentPage.value - 1) * pageSize.value
+    const end = start + pageSize.value
+    return filteredRows.value.slice(start, end)
+})
+
 function applyFilter() {
-    console.log('篩選條件', filters.value)
+    currentPage.value = 1
 }
 function resetFilter() {
     filters.value = { id: '', product_spec: '', range: [], status: '' }
