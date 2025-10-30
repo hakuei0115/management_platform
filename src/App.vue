@@ -3,9 +3,9 @@
     <!-- 左側選單 -->
     <el-aside v-if="auth.isLoggedIn" width="220px">
       <el-menu :default-active="$route.path" router>
-        <el-menu-item index="/management_platform/">管理平台首頁</el-menu-item>
-        <el-menu-item index="/management_platform/equipment">設備管理</el-menu-item>
-        <el-menu-item index="/management_platform/operation">操作管理</el-menu-item>
+        <el-menu-item index="/dashboard">管理平台首頁</el-menu-item>
+        <el-menu-item index="/equipment">設備管理</el-menu-item>
+        <el-menu-item index="/operation">操作管理</el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -38,7 +38,7 @@ const router = useRouter()
 function logout() {
   ElMessageBox.confirm('確定要登出嗎？', '提示', { type: 'warning' }).then(() => {
     auth.logout()
-    router.push('/login')
+    router.push('/')
   })
 }
 </script>

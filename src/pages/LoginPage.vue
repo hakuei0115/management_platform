@@ -41,7 +41,7 @@ async function onLogin() {
         const success = await auth.login(form.value.username, form.value.password)
         if (success) {
             ElMessage.success("登入成功，正在導向首頁...")
-            router.push("/management_platform/") // ✅ 登入成功後導向 DashboardPage.vue
+            router.push("/dashboard")
         } else {
             ElMessage.error("帳號或密碼錯誤")
         }
