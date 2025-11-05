@@ -34,3 +34,9 @@ coverage
 
 # Vitest
 __screenshots__/
+
+*.txt
+*.env
+*.env.*
+.env.local
+.env.*.local
