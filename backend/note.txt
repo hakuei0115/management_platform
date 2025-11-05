@@ -1,0 +1,76 @@
+## mysql
+CREATE USER 'docker_user'@'%' IDENTIFIED BY 'docker_pass';
+
+GRANT ALL PRIVILEGES ON test_db.* TO 'docker_user'@'%';
+FLUSH PRIVILEGES;
+
+SELECT Host, User FROM mysql.user;
+
+GRANT ALL PRIVILEGES ON mindman.* TO 'docker_user'@'%';
+FLUSH PRIVILEGES;
+
+CREATE TABLE users (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name            VARCHAR(100) NOT NULL,
+    email           VARCHAR(100) NOT NULL UNIQUE,
+    password_hash   VARCHAR(255) NOT NULL,
+    status          ENUM('active', 'inactive') DEFAULT 'active',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE roles (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name            VARCHAR(50) NOT NULL UNIQUE,
+    description     VARCHAR(255),
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE user_roles (
+    user_id         BIGINT NOT NULL,
+    role_id         BIGINT NOT NULL,
+    assigned_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, role_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+);
+
+CREATE TABLE equipments (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    equipment_code  VARCHAR(50) NOT NULL UNIQUE,
+    name            VARCHAR(100) NOT NULL,
+    install_location VARCHAR(100),
+    status          ENUM('running', 'standby', 'offline') DEFAULT 'running',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE stations (
+    id              INT PRIMARY KEY,
+    equipment_id    BIGINT NOT NULL,
+    station_no      INT NOT NULL,
+    enabled         BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (equipment_id) REFERENCES equipments(id) ON DELETE CASCADE
+);
+
+CREATE TABLE model_mappings (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    equipment_id    BIGINT NOT NULL,
+    channel         INT NOT NULL,
+    model_name      VARCHAR(100),
+    FOREIGN KEY (equipment_id) REFERENCES equipments(id) ON DELETE CASCADE
+);
+
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.id, r.id
+FROM users u
+JOIN roles r ON (
+    (u.name = 'aict' AND r.name = 'admin')
+ OR (u.name = 'RD'   AND r.name = 'operator')
+ OR (u.name = 'test' AND r.name = 'viewer')
+);
+
+
+-------------------------
+## docker
+docker build -t mindman_backend_app .
+docker run -d --name mindman_backend -p 3000:3000 mindman_backend_app
