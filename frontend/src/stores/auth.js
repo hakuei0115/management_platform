@@ -1,31 +1,31 @@
-import { defineStore } from "pinia";
-import { ref, computed } from "vue";
-import { fakeLoginAPI } from "@/services/api";
+import { ref, computed } from 'vue'
+import { defineStore } from 'pinia'
+import { jwtDecode } from 'jwt-decode'
+import { AuthAPI } from '@/services/api'
 
-export const useAuthStore = defineStore("auth", () => {
-    const token = ref(localStorage.getItem("token") || "");
-    const username = ref(localStorage.getItem("username") || "");
+export const useAuthStore = defineStore('auth', () => {
+    const token = ref(sessionStorage.getItem('token') || '')
+    const user = ref(token.value ? jwtDecode(token.value) : {})
 
-    const isLoggedIn = computed(() => !!token.value);
+    const isLoggedIn = computed(() => !!token.value)
 
-    async function login(user, pass) {
-        const res = await fakeLoginAPI(user, pass);
-        if (res.success) {
-            token.value = res.token;
-            username.value = res.username;
-            localStorage.setItem("token", token.value);
-            localStorage.setItem("username", username.value);
-            return true;
+    async function login(email, password) {
+        const res = await AuthAPI.login(email, password);
+
+        if (res.message === '登入成功') {
+            token.value = res.token
+            user.value = jwtDecode(res.token)
+            sessionStorage.setItem('token', token.value)
+            return true
         }
-        return false;
+        return false
     }
 
     function logout() {
-        token.value = "";
-        username.value = "";
-        localStorage.removeItem("token");
-        localStorage.removeItem("username");
+        token.value = ''
+        user.value = {}
+        sessionStorage.removeItem('token')
     }
 
-    return { token, username, isLoggedIn, login, logout };
-});
+    return { token, user, isLoggedIn, login, logout }
+})

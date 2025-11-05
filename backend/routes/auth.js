@@ -17,11 +17,16 @@ router.post("/login", async (req, res) => {
             return res.status(401).json({ message: "帳號或密碼錯誤" });
 
         const user = rows[0];
+
         const valid = await bcrypt.compare(password, user.password_hash);
         if (!valid) return res.status(401).json({ message: "帳號或密碼錯誤" });
 
+        const [roleRows] = await pool.query("SELECT r.name AS role_name FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ?", [user.id]);
+
+        const role = roleRows.length > 0 ? roleRows[0].role_name : null;
+
         const token = jwt.sign(
-            { id: user.id, email: user.email, role: user.role },
+            { id: user.id, email: user.email, role },
             process.env.JWT_SECRET,
             { expiresIn: "15m" }
         );

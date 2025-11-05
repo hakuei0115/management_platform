@@ -38,8 +38,10 @@ const rules = {
 async function onLogin() {
     formRef.value.validate(async (valid) => {
         if (!valid) return
-        const success = await auth.login(form.value.username, form.value.password)
-        if (success) {
+
+        const response = await auth.login(form.value.username, form.value.password)
+
+        if (response) {
             ElMessage.success("登入成功，正在導向首頁...")
             router.push("/dashboard")
         } else {
