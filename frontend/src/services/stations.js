@@ -4,6 +4,7 @@ export const StationAPI = {
     async fetchStationList(equipmentId) {
         try {
             const res = await api.get(`/equipments/${equipmentId}/stations`);
+            
             return res.data;
         } catch (error) {
             console.error('StationAPI.fetchStationList error:', error);
@@ -11,9 +12,9 @@ export const StationAPI = {
         }
     },
 
-    async insertStation(stationData) {
+    async insertStation(equipmentId, stationData) {
         try {
-            const res = await api.post('/stations', stationData);
+            const res = await api.post(`/equipments/${equipmentId}/stations`, stationData);
 
             return res.data;
         } catch (error) {
@@ -22,9 +23,9 @@ export const StationAPI = {
         }
     },
 
-    async updateStation(stationId, stationData) {
+    async updateStation(equipmentId, stationId, stationData) {
         try {
-            const res = await api.put(`/stations/${stationId}`, stationData);
+            const res = await api.put(`/equipments/${equipmentId}/stations/${stationId}`, stationData);
 
             return res.data;
         } catch (error) {
@@ -33,9 +34,9 @@ export const StationAPI = {
         }
     },
 
-    async deleteStation(stationId) {
+    async deleteStation(equipmentId, stationId) {
         try {
-            const res = await api.delete(`/stations/${stationId}`);
+            const res = await api.delete(`/equipments/${equipmentId}/stations/${stationId}`);
 
             return res.data;
         } catch (error) {

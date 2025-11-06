@@ -9,22 +9,25 @@
         </div>
 
         <!-- 表格區 -->
-        <el-table v-loading="loading" :data="filteredDevices" border row-key="id" style="width: 100%"
-            v-model:expand-row-keys="expandedRows" @expand-change="getStations">
+        <el-table v-loading="loading" :data="filteredDevices" border row-key="id" style="width: 100%" @expand-change="getStations">
             <el-table-column type="expand">
                 <template #default="{ row }">
                     <div class="station-header">
                     <h4>{{ row.name }} - 站點清單</h4>
                     <el-button size="small" type="success" @click="addStation(row)">新增站點</el-button>
                     </div>
-                    <el-table :data="stationStore.stationList" size="small" border>
-                    <el-table-column prop="station_no" label="站點" width="100" />
+                    <el-table :data="stationStore.stationMap[row.id]" size="small" border>
+                    <el-table-column prop="id" label="站點" width="100" />
                     <el-table-column prop="enabled" label="啟用" width="100">
                         <template #default="{ row: station }">
-                            <el-switch v-model="station.enabled" :active-value="1" :inactive-value="0" />
+                            <el-switch v-model="station.enabled" :active-value="1" :inactive-value="0" @click="updateStation(row, station)" />
                         </template>
                     </el-table-column>
-                    <el-table-column prop="last_test_at" label="最近測試" />
+                    <el-table-column label="操作" width="100" >
+                        <template #default="{ row: station }">
+                            <el-button size="small" type="danger" @click="deleteStation(row, station)">刪除</el-button>
+                        </template>
+                    </el-table-column>
                     </el-table>
                 </template>
             </el-table-column>
@@ -110,7 +113,6 @@ const drawerVisible = ref(false)
 const dialogVisible = ref(false)
 const editingDevice = ref(null)
 const formRef = ref(null)
-const expandedRows = ref([])
 const activeDevice = ref(null)
 const activeModelMap = ref([])
 const loading = ref(false)
@@ -129,15 +131,78 @@ onMounted(fetchList)
 
 async function getStations(row) {
     loading.value = true
+    if (stationStore.stationMap[row.id]) {
+        loading.value = false
+        console.log(stationStore.stationMap[row.id]);
+        return stationStore.stationMap[row.id]
+    }
+
     try {
         await stationStore.fetchStationList(row.id)
 
-        console.log(stationStore.stationList);
-
-        return stationStore.stationList
+        return stationStore.stationMap[row.id]
     } catch (error) {
         ElMessage.error(error.message || '取得站點資料失敗')
         return []
+    } finally {
+        loading.value = false
+    }
+}
+
+async function addStation(row) {
+    loading.value = true
+    const equipment_id = row.id;
+
+    try {
+        await stationStore.insertStation(
+            equipment_id, 
+            {
+                id: `${equipment_id}0${stationStore.stationMap[equipment_id].length + 1}`,
+                equipment_id: equipment_id,
+                station_no: `${stationStore.stationMap[equipment_id].length + 1}`,
+                enabled: 1,
+            }
+        );
+        ElMessage.success('新增站點成功');
+        await getStations(row);
+    } catch (error) {
+        ElMessage.error(error.message || '新增站點失敗')
+    } finally {
+        loading.value = false
+    }
+}
+
+async function updateStation(row, station) {
+    loading.value = true
+    const equipment_id = row.id;
+    try {
+        await stationStore.updateStation(
+            equipment_id,
+            station.id,
+            {
+                id: station.station_id,
+                equipment_id: equipment_id,
+                station_no: station.station_no,
+                enabled: station.enabled,
+            }
+        );
+        ElMessage.success('站點已更新');
+    } catch (error) {
+        ElMessage.error(error.message || '更新站點失敗')
+    } finally {
+        loading.value = false
+    }
+}
+
+async function deleteStation(row, station) {
+    loading.value = true
+    const equipment_id = row.id;
+    try {
+        await stationStore.deleteStation(equipment_id, station.id);
+        ElMessage.success('站點已刪除');
+        await getStations(row);
+    } catch (error) {
+        ElMessage.error(error.message || '刪除站點失敗')
     } finally {
         loading.value = false
     }

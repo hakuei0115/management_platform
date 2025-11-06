@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { StationAPI } from '@/services/stations'
 
 export const useStationStore = defineStore('station', () => {
-    const stationList = ref([]);
+    const stationMap = ref({});
     const loading = ref(false);
     const error = ref(null);
 
@@ -15,8 +15,9 @@ export const useStationStore = defineStore('station', () => {
             const res = await StationAPI.fetchStationList(equipmentId);
 
             if (res.length !== 0) {
-                stationList.value = res.stations || [];
+                stationMap.value[equipmentId] = res.stations;
             } else {
+                stationMap.value[equipmentId] = [];
                 throw new Error(res.message || '取得站點列表失敗');
             }
         } catch (err) {
@@ -28,16 +29,17 @@ export const useStationStore = defineStore('station', () => {
         }
     }
 
-    async function insertStation(stationData) {
+    async function insertStation(equipmentId, stationData) {
         loading.value = true;
         error.value = null;
 
         try {
             const payload = stationData?.value ? stationData.value : stationData;
-            const res = await StationAPI.insertStation(payload);
+            const res = await StationAPI.insertStation(equipmentId, payload);
 
             if (res.success) {
-                stationList.value.push(payload);
+                if (!stationMap.value[equipmentId]) stationMap.value[equipmentId] = [];
+                stationMap.value[equipmentId].push(payload);
             } else {
                 throw new Error(res.message || '新增站點失敗');
             }
@@ -52,18 +54,19 @@ export const useStationStore = defineStore('station', () => {
         }
     }
 
-    async function updateStation(stationId, stationData) {
+    async function updateStation(equipmentId, stationId, stationData) {
         loading.value = true;
         error.value = null;
 
         try {
             const payload = stationData?.value ? stationData.value : stationData;
-            const res = await StationAPI.updateStation(stationId, payload);
+            const res = await StationAPI.updateStation(equipmentId, stationId, payload);
 
             if (res.success) {
-                const index = stationList.value.findIndex(station => station.id === stationId);
-                if (index !== -1) {
-                    stationList.value[index] = payload;
+                const list = stationMap.value[equipmentId]
+                if (list) {
+                    const index = list.findIndex(station => station.id === stationId)
+                    if (index !== -1) list[index] = { ...list[index], ...payload }
                 }
             } else {
                 throw new Error(res.message || '更新站點失敗');
@@ -79,15 +82,18 @@ export const useStationStore = defineStore('station', () => {
         }
     }
 
-    async function deleteStation(stationId) {
+    async function deleteStation(equipmentId, stationId) {
         loading.value = true;
         error.value = null;
 
         try {
-            const res = await StationAPI.deleteStation(stationId);
+            const res = await StationAPI.deleteStation(equipmentId, stationId);
 
             if (res.success) {
-                stationList.value = stationList.value.filter(station => station.id !== stationId);
+                const list = stationMap.value[equipmentId];
+                if (list) {
+                    stationMap.value[equipmentId] = list.filter(station => station.id !== stationId);
+                }
             } else {
                 throw new Error(res.message || '刪除站點失敗');
             }
@@ -103,7 +109,7 @@ export const useStationStore = defineStore('station', () => {
     }
 
     return {
-        stationList,
+        stationMap,
         loading,
         error,
         fetchStationList,

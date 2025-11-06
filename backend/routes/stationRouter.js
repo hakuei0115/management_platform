@@ -18,14 +18,14 @@ router.get("/equipments/:equipmentId/stations", async (req, res) => {
 router.post("/equipments/:equipmentId/stations", async (req, res) => {
     try {
         const equipmentId = req.params.equipmentId;
-        const { station_no } = req.body;
+        const { id, station_no } = req.body;
 
-        if (!station_no)
+        if (!id || !station_no)
             return res.status(400).json({ success: false, message: "缺少必要欄位 station_no" });
 
         const [result] = await pool.query(
-            "INSERT INTO stations (equipment_id, station_no) VALUES (?, ?)",
-            [equipmentId, station_no]
+            "INSERT INTO stations (id, equipment_id, station_no) VALUES (?, ?, ?)",
+            [id, equipmentId, station_no]
         );
 
         res.status(200).json({ success: true, message: "站點新增成功" });

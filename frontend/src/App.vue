@@ -15,7 +15,7 @@
       <el-header v-if="auth.isLoggedIn" height="56px" class="app-header">
         <div class="header-left">智能數據管理平台</div>
         <div class="header-right">
-          <span>{{ auth.username }}</span>
+          <span>{{ auth.user.name }} ({{ auth.user.role }})</span>
           <el-button type="danger" size="small" @click="logout">登出</el-button>
         </div>
       </el-header>
