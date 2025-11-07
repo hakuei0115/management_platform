@@ -18,23 +18,6 @@ router.get("/users", verifyToken, requireRole("admin"), async (req, res) => {
     }
 });
 
-// 取得單一使用者資料 FIXME: 這要做啥 回傳name而已嗎
-router.get("/users/:id", async (req, res) => {
-    try {
-        const userId = req.params.id;
-        const [rows] = await pool.query("SELECT name FROM users WHERE id = ?", [userId]);
-
-        if (rows.length === 0) {
-            return res.status(404).json({ message: "使用者不存在" });
-        }
-
-        res.json({ user: rows[0] });
-    } catch (error) {
-        console.error("取得使用者失敗:", error);
-        res.status(500).json({ message: "伺服器錯誤" });
-    }
-});
-
 // 新增使用者
 router.post("/users", verifyToken, requireRole("admin"), async (req, res) => {
     try {
@@ -53,7 +36,7 @@ router.post("/users", verifyToken, requireRole("admin"), async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         const [result] = await pool.query("INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)", [name, email, hashedPassword]);
 
-        res.status(201).json({ id: result.insertId, name, email });
+        res.status(201).json({ success: true, message: "使用者註冊成功" });
 
     } catch (error) {
         console.error("註冊失敗:", error);
@@ -79,14 +62,14 @@ router.put("/users/:id", verifyToken, requireRole("admin"), async (req, res) => 
             // 檢查 email 是否已被其他使用者使用
             const [exists] = await pool.query("SELECT id FROM users WHERE email = ? AND id <> ?", [email, userId]);
             if (exists.length > 0) {
-                return res.status(409).json({ message: "Email 已註冊" });
+                return res.status(409).json({ success: false, message: "Email 已註冊" });
             }
             fields.push("email = ?");
             params.push(email);
         }
 
         if (fields.length === 0) {
-            return res.status(400).json({ message: "沒有要更新的欄位" });
+            return res.status(400).json({ success: false, message: "沒有要更新的欄位" });
         }
 
         params.push(userId);
@@ -94,13 +77,13 @@ router.put("/users/:id", verifyToken, requireRole("admin"), async (req, res) => 
         const [result] = await pool.query(sql, params);
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({ message: "使用者不存在" });
+            return res.status(404).json({ success: false, message: "使用者不存在" });
         }
 
-        res.json({ message: "使用者資料更新成功" });
+        res.status(200).json({ success: true, message: "使用者資料更新成功" });
     } catch (error) {
         console.error("更新使用者失敗:", error);
-        res.status(500).json({ message: "伺服器錯誤" });
+        res.status(500).json({ success: false, message: "伺服器錯誤" });
     }
 });
 
@@ -110,13 +93,13 @@ router.delete("/users/:id", verifyToken, requireRole("admin"), async (req, res) 
         const [result] = await pool.query("DELETE FROM users WHERE id = ?", [userId]);
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({ message: "使用者不存在" });
+            return res.status(404).json({ success: false, message: "使用者不存在" });
         }
 
-        res.json({ message: "使用者已刪除" });
+        res.json({ success: true, message: "使用者已刪除" });
     } catch (error) {
         console.error("刪除使用者失敗:", error);
-        res.status(500).json({ message: "伺服器錯誤" });
+        res.status(500).json({ success: false, message: "伺服器錯誤" });
     }
 });
 

@@ -10,15 +10,18 @@ export const useAuthStore = defineStore('auth', () => {
     const isLoggedIn = computed(() => !!token.value)
 
     async function login(email, password) {
-        const res = await AuthAPI.login(email, password);
+        try {
+            const res = await AuthAPI.login(email, password);
 
-        if (res.message === '登入成功') {
-            token.value = res.token
-            user.value = jwtDecode(res.token)
-            sessionStorage.setItem('token', token.value)
-            return true
+            if (res.success) {
+                token.value = res.token;
+                user.value = jwtDecode(res.token);
+                sessionStorage.setItem('token', token.value);
+                return res;
+            }
+        } catch (error) {
+            return error || '登入失敗，請稍後再試。';
         }
-        return false
     }
 
     function logout() {

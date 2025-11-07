@@ -6,6 +6,7 @@
         <el-menu-item index="/dashboard">管理平台首頁</el-menu-item>
         <el-menu-item index="/equipment">設備管理</el-menu-item>
         <el-menu-item index="/operation">操作管理</el-menu-item>
+        <el-menu-item index="/account">帳號管理</el-menu-item>
       </el-menu>
     </el-aside>
 

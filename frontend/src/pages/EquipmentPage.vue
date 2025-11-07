@@ -56,19 +56,19 @@
 
         <!-- 型號對照表 Drawer -->
         <el-drawer v-model="drawerVisible" :title="activeDevice ? `型號對照表 - ${activeDevice.name}` : '型號對照表'" size="45%">
-            <el-table :data="activeModelMap" border height="70vh">
+            <el-table :data="activeModelMap[activeDevice.id]" border height="70vh">
                 <el-table-column prop="channel" label="配方頻道" width="120" />
                 <el-table-column label="型號">
                     <template #default="{ row }">
-                        <el-input v-if="row.editable" v-model="row.model" placeholder="輸入產品型號" />
-                        <span v-else>{{ row.model }}</span>
+                        <el-input v-if="row.editable" v-model="row.model_name" placeholder="輸入產品型號" />
+                        <span v-else>{{ row.model_name }}</span>
                     </template>
                 </el-table-column>
             </el-table>
 
             <div style="text-align:right; margin-top:10px;">
                 <el-button @click="enableEdit">重新編輯</el-button>
-                <el-button type="primary" @click="saveModelMap">儲存設定</el-button>
+                <el-button type="primary" @click="saveModelMap()">儲存設定</el-button>
             </div>
         </el-drawer>
 
@@ -105,9 +105,11 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useEquipmentStore } from '@/stores/equipment'
 import { useStationStore } from '@/stores/stations'
+import { useModelMappingsStore } from '@/stores/modelMappings'
 
 const equipmentStore = useEquipmentStore()
 const stationStore = useStationStore()
+const modelMappingsStore = useModelMappingsStore()
 const search = ref('')
 const drawerVisible = ref(false)
 const dialogVisible = ref(false)
@@ -208,6 +210,48 @@ async function deleteStation(row, station) {
     }
 }
 
+async function getModelMapping(row) {
+    loading.value = true
+    try {
+        await modelMappingsStore.fetchModelMappings(row.id);
+    } catch (error) {
+        ElMessage.error(error.message || '取得型號對照表失敗')
+    } finally {
+        loading.value = false
+    }
+}
+
+// 模型邏輯
+async function openModelDrawer(device) {
+    console.log(device);
+    activeDevice.value = device
+    await getModelMapping(device)
+    activeModelMap.value = modelMappingsStore.modelMappings || []
+    drawerVisible.value = true
+}
+
+function enableEdit() {
+    activeModelMap.value[activeDevice.value.id].forEach(i => i.editable = true)
+}
+
+async function saveModelMap() {
+    console.log(activeModelMap.value);
+
+    // FIXME: 這裡判斷陣列不能只用[0]
+    loading.value = true
+    try {
+        console.log(activeModelMap.value);
+        await modelMappingsStore.updateModelMapping(activeDevice.value.id, modelMappingsStore.modelMappings[activeDevice.value.id][0].id , activeModelMap.value[activeDevice.value.id][0]);
+
+        activeModelMap.value[activeDevice.value.id].forEach(i => i.editable = false);
+        ElMessage.success('型號設定已更新')
+    } catch (error) {
+        ElMessage.error(error.message || '更新型號設定失敗');
+    } finally {
+        loading.value = false
+    }
+}
+
 const filteredDevices = computed(() => {
     const list = equipmentStore.equipmentList || []
     if (!search.value) return list
@@ -226,20 +270,6 @@ function statusColor(status) {
         case 'standby': return 'warning'
         default: return 'info'
     }
-}
-
-// 模型邏輯
-function openModelDrawer(device) {
-    activeDevice.value = device
-    activeModelMap.value = device.modelMap || []
-    drawerVisible.value = true
-}
-function enableEdit() {
-    activeModelMap.value.forEach(i => i.editable = true)
-}
-function saveModelMap() {
-    activeModelMap.value.forEach(i => i.editable = false)
-    ElMessage.success('型號設定已更新')
 }
 
 // 表單邏輯

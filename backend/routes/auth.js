@@ -14,12 +14,12 @@ router.post("/login", async (req, res) => {
         const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [email]);
 
         if (rows.length === 0)
-            return res.status(401).json({ message: "帳號或密碼錯誤" });
+            return res.status(401).json({ success: false, message: "帳號或密碼錯誤" });
 
         const user = rows[0];
 
         const valid = await bcrypt.compare(password, user.password_hash);
-        if (!valid) return res.status(401).json({ message: "帳號或密碼錯誤" });
+        if (!valid) return res.status(401).json({ success: false, message: "帳號或密碼錯誤" });
 
         const [roleRows] = await pool.query("SELECT r.name AS role_name FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ?", [user.id]);
 
@@ -31,10 +31,10 @@ router.post("/login", async (req, res) => {
             { expiresIn: "15m" }
         );
 
-        res.json({ message: "登入成功", token });
+        res.json({ success: true, message: "登入成功", token });
     } catch (err) {
         console.error("❌ 登入錯誤:", err);
-        res.status(500).json({ message: "伺服器錯誤" });
+        res.status(500).json({ success: false, message: "伺服器錯誤" });
     }
 });
 

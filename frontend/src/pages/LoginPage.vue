@@ -23,7 +23,7 @@
 import { ref } from "vue"
 import { useRouter } from "vue-router"
 import { useAuthStore } from "@/stores/auth"
-import { ElMessage } from "element-plus"
+import Swal from "sweetalert2"
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -39,13 +39,24 @@ async function onLogin() {
     formRef.value.validate(async (valid) => {
         if (!valid) return
 
-        const response = await auth.login(form.value.username, form.value.password)
+        const response = await auth.login(form.value.username, form.value.password);
 
-        if (response) {
-            ElMessage.success("登入成功，正在導向首頁...")
+        if (response.success) {
+            Swal.fire({
+                icon: 'success',
+                title: '登入成功',
+                showConfirmButton: false,
+                timer: 1500
+            });
             router.push("/dashboard")
         } else {
-            ElMessage.error("帳號或密碼錯誤")
+            Swal.fire({
+                icon: 'error',
+                title: '登入失敗',
+                text: '請檢查帳號密碼是否正確',
+            });
+            form.value.username = '';
+            form.value.password = '';
         }
     })
 }

@@ -4,6 +4,7 @@ export const AuthAPI = {
     async login(email, password) {
         try {
             const res = await api.post('/login', { email, password })
+
             return res.data
         } catch (err) {
             console.error('AuthAPI.login error:', err)
