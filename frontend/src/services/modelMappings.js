@@ -3,11 +3,13 @@ import api from './axiosInstance';
 export const ModelMappingsAPI = {
     async fetchModelMappings(equipmentId) {
         try {
-            const response = await api.get(`/equipments/${equipmentId}/model_mappings`);
+            const res = await api.get(`/equipments/${equipmentId}/model_mappings`);
 
-            console.log(response.data.result);
-            
-            return response.data.result;
+            if (res.data.success) {
+                return res.data.data;
+            } else {
+                throw new Error(res.data.message || '取得模型對照表失敗，請稍後再試');
+            }
         } catch (error) {
             console.error("Error fetching model mappings:", error);
             throw error.response?.data || { message: "取得模型對照表失敗，請稍後再試" };

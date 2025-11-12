@@ -14,14 +14,7 @@ export const useModelMappingsStore = defineStore('modelMappings', () => {
         try {
             const response = await ModelMappingsAPI.fetchModelMappings(equipmentId);
 
-            console.log(response);
-
-            if (response.length !== 0) {
-                modelMappings.value[equipmentId] = response;
-            } else {
-                modelMappings.value[equipmentId] = [];
-                throw new Error(response.message || '取得模型對照表失敗');
-            }
+            modelMappings.value[equipmentId] = response;
         } catch (error) {
             console.error('fetchModelMappings error:', error);
             error.value = error.message || '無法取得模型對照表';

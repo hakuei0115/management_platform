@@ -33,9 +33,13 @@ router.get("/data", async (req, res) => {
         }
 
         res.json({
-            total: translated.length,
-            count: filtered.length,
-            records: filtered,
+            success: true,
+            data: {
+                total: translated.length,
+                count: filtered.length,
+                records: filtered,
+            },
+            message: "取得設備數據成功"
         });
     } catch (error) {
         console.error("取得設備數據失敗:", error);

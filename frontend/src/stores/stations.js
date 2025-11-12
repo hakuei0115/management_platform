@@ -15,10 +15,9 @@ export const useStationStore = defineStore('station', () => {
             const res = await StationAPI.fetchStationList(equipmentId);
 
             if (res.length !== 0) {
-                stationMap.value[equipmentId] = res.stations;
+                stationMap.value[equipmentId] = res;
             } else {
                 stationMap.value[equipmentId] = [];
-                throw new Error(res.message || '取得站點列表失敗');
             }
         } catch (err) {
             console.error('fetchStationList error:', err);

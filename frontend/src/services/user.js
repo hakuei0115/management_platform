@@ -5,9 +5,14 @@ export const UserAPI = {
         try {
             const res = await api.get('/users');
 
-            return res.data;
+            if (res.data.success) {
+                return res.data.data;
+            } else {
+                throw new Error(res.data.message || '取得使用者列表失敗，請稍後再試');
+            }
         } catch (error) {
             console.error('Error fetching user list:', error);
+
             throw error;
         }
     },
@@ -38,6 +43,22 @@ export const UserAPI = {
             return res.data;
         } catch (error) {
             console.error('Error deleting user:', error);
+            throw error;
+        }
+    },
+
+    async getRoles() {
+        try {
+            const res = await api.get('/roles');
+
+            if (res.data.success) {
+                return res.data.data;
+            } else {
+                throw new Error(res.data.message || '取得角色列表失敗，請稍後再試');
+            }
+        } catch (error) {
+            console.error('Error fetching user roles:', error);
+
             throw error;
         }
     }

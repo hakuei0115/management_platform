@@ -1,7 +1,7 @@
 <template>
     <div class="login-container">
         <el-card class="login-card">
-            <h2 class="title">智能數據管理平台</h2>
+            <h2 class="title">過濾調壓器製造數據管理平台</h2>
             <el-form :model="form" ref="formRef" :rules="rules" label-width="80px">
                 <el-form-item label="帳號" prop="username">
                     <el-input v-model="form.username" placeholder="輸入帳號" />

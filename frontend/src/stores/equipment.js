@@ -12,12 +12,9 @@ export const useEquipmentStore = defineStore('equipment', () => {
         error.value = null
 
         try {
-            const res = await EquipmentAPI.fetchEquipmentList()
-            if (res.length !== 0) {
-                equipmentList.value = res.equipment || []
-            } else {
-                throw new Error(res.message || '取得設備列表失敗')
-            }
+            const res = await EquipmentAPI.fetchEquipmentList();
+
+            equipmentList.value = res;
         } catch (err) {
             console.error('fetchEquipmentList error:', err)
             error.value = err.message || '無法取得設備列表'

@@ -8,7 +8,7 @@ router.get("/equipments/:equipmentId/stations", async (req, res) => {
         const equipmentId = req.params.equipmentId;
         const [stations] = await pool.query("SELECT * FROM stations WHERE equipment_id = ?", [equipmentId]);
 
-        res.json({ stations });
+        res.json({ success: true, data: stations, message: "取得設備站點列表成功" });
     } catch (error) {
         console.error("取得設備站點列表失敗:", error);
         res.status(500).json({ success: false, message: "伺服器錯誤" });

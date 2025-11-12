@@ -46,9 +46,9 @@ import { ElMessage } from 'element-plus'
 
 // ------------------ 假資料 ------------------
 const allData = ref([
-    { id: 1087, station_no: 3, product_spec: 'MAFR-302', suggestion: '吹淨帽型蓋', part: '帽型蓋' },
-    { id: 1088, station_no: 4, product_spec: 'MAFR-302', suggestion: '更換氣閥', part: '氣閥' },
-    { id: 1089, station_no: 2, product_spec: 'MAFR-302', suggestion: '檢查活塞密封', part: '活塞' },
+    { id: 1087, station_no: 3, product_spec: 'MAFR-302', suggestion: '更換帽型蓋 -> 吹淨S28 -> 吹淨帽型蓋 -> 吹淨活塞 -> 更換S28 -> 吹淨內杯', part: '帽型蓋' },
+    { id: 1088, station_no: 4, product_spec: 'MAFR-302', suggestion: '產品狀態良好，無需維修', part: '無' },
+    { id: 1089, station_no: 2, product_spec: 'MAFR-302', suggestion: '吹淨活塞 -> 更換S28 -> 更換帽型蓋 -> 吹淨帽型蓋 -> 吹淨S28', part: '活塞' },
 ])
 
 // 🔹 最新數據（會自動刷新）

@@ -5,7 +5,11 @@ export const EquipmentAPI = {
         try {
             const res = await api.get('/equipments');
 
-            return res.data;
+            if (res.data.success) {
+                return res.data.data;
+            } else {
+                throw new Error(res.data.message || '取得設備列表失敗，請稍後再試');
+            }
         } catch (err) {
             console.error('EquipmentAPI.fetchEquipmentList error:', err);
             throw err.response?.data || { message: '取得設備列表失敗，請稍後再試' };

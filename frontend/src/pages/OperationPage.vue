@@ -107,7 +107,7 @@ const rows = ref([
         M01: 'OK', M02: 'OK', M03: 'OK', M04: 'NG', M05: 'OK', M06: 'OK',
         M07: 'OK', M08: 'NG', M09: 'OK', M10: 'OK', M11: 'OK', M12: 'OK',
         M04_leak: '1.038', M05_leak: '6.499', M08_leak: '0.339', M11_leak: '5.422',
-        suggestion: '吹淨帽型蓋',
+        suggestion: '更換帽型蓋 -> 吹淨S28 -> 吹淨帽型蓋 -> 吹淨活塞 -> 更換S28 -> 吹淨內杯',
         part: '帽型蓋'
     },
     {

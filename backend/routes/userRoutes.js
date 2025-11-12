@@ -1,105 +1,117 @@
 import express from "express";
-import pool from "../db.js";
 import bcrypt from "bcrypt";
+import pool from "../db.js";
 import { verifyToken } from "../middleware/authMiddleware.js";
 import { requireRole } from "../middleware/roleMiddleware.js";
 
 const router = express.Router();
 
-// 取得所有使用者列表
 router.get("/users", verifyToken, requireRole("admin"), async (req, res) => {
     try {
-        const [users] = await pool.query("SELECT * FROM users");
+        const [users] = await pool.query(`
+            SELECT 
+                u.id, u.name, u.email, u.status,
+                r.id AS role_id, r.name AS role_name
+            FROM users u
+            LEFT JOIN user_roles ur ON u.id = ur.user_id
+            LEFT JOIN roles r ON ur.role_id = r.id
+            ORDER BY u.id
+        `);
 
-        res.json({ users });
-    } catch (error) {
-        console.error("取得使用者列表失敗:", error);
-        res.status(500).json({ message: "伺服器錯誤" });
+        res.json({ success: true, data: users, message: "取得使用者列表成功" });
+    } catch (err) {
+        console.error("取得使用者列表失敗:", err);
+        res.status(500).json({ success: false, message: "伺服器錯誤" });
     }
 });
 
-// 新增使用者
 router.post("/users", verifyToken, requireRole("admin"), async (req, res) => {
+    const conn = await pool.getConnection();
     try {
-        const { name, email, password } = req.body;
-
-        if (!name || !email || !password) {
-            return res.status(400).json({ message: "缺少必要欄位" });
+        const { name, email, password, role } = req.body;
+        if (!name || !email || !password || !role) {
+            return res.status(400).json({ success: false, message: "缺少必要欄位" });
         }
 
-        const [exists] = await pool.query("SELECT id FROM users WHERE email = ?", [email]);
+        const hash = await bcrypt.hash(password, 10);
+        await conn.beginTransaction();
 
-        if (exists.length > 0) {
-            return res.status(409).json({ message: "Email 已註冊" });
+        const [userResult] = await conn.query(
+            "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
+            [name, email, hash]
+        );
+        const userId = userResult.insertId;
+
+        await conn.query("INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)", [userId, role]);
+
+        await conn.commit();
+        res.json({ success: true, message: "使用者建立成功", user_id: userId });
+    } catch (err) {
+        await conn.rollback();
+        console.error("新增使用者失敗:", err);
+        if (err.code === "ER_DUP_ENTRY") {
+            return res.status(409).json({ success: false, message: "Email 已存在" });
         }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const [result] = await pool.query("INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)", [name, email, hashedPassword]);
-
-        res.status(201).json({ success: true, message: "使用者註冊成功" });
-
-    } catch (error) {
-        console.error("註冊失敗:", error);
-        res.status(500).json({ message: "伺服器錯誤" });
+        res.status(500).json({ success: false, message: "伺服器錯誤" });
+    } finally {
+        conn.release();
     }
 });
 
 router.put("/users/:id", verifyToken, requireRole("admin"), async (req, res) => {
+    const conn = await pool.getConnection();
     try {
         const userId = req.params.id;
-        const { name, email } = req.body;
+        const { name, email, password, role } = req.body;
 
-        // 建立動態更新欄位與參數
-        const fields = [];
-        const params = [];
+        await conn.beginTransaction();
 
-        if (name !== undefined) {
-            fields.push("name = ?");
-            params.push(name);
+        await conn.query(
+            "UPDATE users SET name = ?, email = ? WHERE id = ?",
+            [name, email, userId]
+        );
+
+        if (password && password.trim() !== "") {
+            const hashed = await bcrypt.hash(password, 10);
+            await conn.query(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                [hashed, userId]
+            );
         }
 
-        if (email !== undefined) {
-            // 檢查 email 是否已被其他使用者使用
-            const [exists] = await pool.query("SELECT id FROM users WHERE email = ? AND id <> ?", [email, userId]);
-            if (exists.length > 0) {
-                return res.status(409).json({ success: false, message: "Email 已註冊" });
-            }
-            fields.push("email = ?");
-            params.push(email);
-        }
+        await conn.query(
+            "UPDATE user_roles SET role_id = ? WHERE user_id = ?",
+            [role, userId]
+        );
 
-        if (fields.length === 0) {
-            return res.status(400).json({ success: false, message: "沒有要更新的欄位" });
-        }
-
-        params.push(userId);
-        const sql = `UPDATE users SET ${fields.join(", ")} WHERE id = ?`;
-        const [result] = await pool.query(sql, params);
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ success: false, message: "使用者不存在" });
-        }
-
-        res.status(200).json({ success: true, message: "使用者資料更新成功" });
-    } catch (error) {
-        console.error("更新使用者失敗:", error);
+        await conn.commit();
+        res.json({ success: true, message: "使用者更新成功" });
+    } catch (err) {
+        await conn.rollback();
+        console.error("更新使用者失敗:", err);
         res.status(500).json({ success: false, message: "伺服器錯誤" });
+    } finally {
+        conn.release();
     }
 });
 
 router.delete("/users/:id", verifyToken, requireRole("admin"), async (req, res) => {
+    const conn = await pool.getConnection();
     try {
         const userId = req.params.id;
-        const [result] = await pool.query("DELETE FROM users WHERE id = ?", [userId]);
+        await conn.beginTransaction();
 
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ success: false, message: "使用者不存在" });
-        }
+        await conn.query("DELETE FROM user_roles WHERE user_id = ?", [userId]);
+        await conn.query("DELETE FROM users WHERE id = ?", [userId]);
 
+        await conn.commit();
         res.json({ success: true, message: "使用者已刪除" });
-    } catch (error) {
-        console.error("刪除使用者失敗:", error);
+    } catch (err) {
+        await conn.rollback();
+        console.error("刪除使用者失敗:", err);
         res.status(500).json({ success: false, message: "伺服器錯誤" });
+    } finally {
+        conn.release();
     }
 });
 

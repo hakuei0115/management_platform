@@ -7,7 +7,7 @@ router.get("/equipments", async (req, res) => {
     try {
         const [equipment] = await pool.query("SELECT * FROM equipments");
 
-        res.json({ equipment });
+        res.json({ success: true, data: equipment, message: "取得設備列表成功" });
     } catch (error) {
         console.error("取得設備列表失敗:", error);
         res.status(500).json({ message: "伺服器錯誤" });

@@ -11,7 +11,7 @@ router.get("/equipments/:equipmentId/model_mappings", async (req, res) => {
             [equipmentId]
         );
 
-        res.json({ result });
+        res.json({ success: true,  data: result, message: "取得型號對照表成功" });
     } catch (error) {
         console.error("取得型號對照表失敗:", error);
         res.status(500).json({ success: false, message: "伺服器錯誤" });
@@ -28,7 +28,7 @@ router.post("/equipments/:equipmentId/model_mappings", async (req, res) => {
             return res.status(400).json({ success: false, message: "缺少必要欄位" });
         }
         
-        const [result] = await pool.query("INSERT INTO model_mappings (equipment_id, channel, model_name) VALUES (?, ?, ?)", [equipmentId, channel, model_name]);
+        await pool.query("INSERT INTO model_mappings (equipment_id, channel, model_name) VALUES (?, ?, ?)", [equipmentId, channel, model_name]);
 
         res.status(201).json({ success: true, message: "型號對照表已建立" });
     } catch (error) {
@@ -72,7 +72,7 @@ router.delete("/equipments/:equipmentId/model_mappings/:mappingId", async (req, 
             return res.status(404).json({ success: false, message: "型號對照表未找到" });
         }
 
-        res.status(204).json({ success: true, message: "型號對照表已刪除" });
+        return res.status(200).json({ success: true, message: "型號對照表已刪除" });
     } catch (error) {
         console.error("刪除型號對照表失敗:", error);
         res.status(500).json({ success: false, message: "伺服器錯誤" });
