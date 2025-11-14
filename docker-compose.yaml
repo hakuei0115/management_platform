@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+    frontend:
+        build: ./frontend
+        container_name: mp_frontend
+        ports:
+            - "80:80"
+        depends_on:
+            - backend
+            - model
+        networks:
+            - mp_net
+
+    backend:
+        build: ./backend
+        container_name: mp_backend
+        ports:
+            - "3000:3000"
+        networks:
+            - mp_net
+
+    model:
+        build: ./model_predict
+        container_name: mp_model
+        ports:
+            - "5000:5000"
+        networks:
+            - mp_net
+
+networks:
+    mp_net:
+        driver: bridge

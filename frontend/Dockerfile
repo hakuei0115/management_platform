@@ -1,18 +1,22 @@
-FROM node:22-slim
-
-# 設定時區與工作目錄
-ENV TZ=Asia/Taipei
+# --- Build stage ---
+FROM node:22-slim AS build
 WORKDIR /app
 
-# 複製 package.json 並安裝依賴
 COPY package*.json ./
 RUN npm install
 
-# 複製專案
 COPY . .
+RUN npm run build
 
-# Vue 開發伺服器使用 5173 port
-EXPOSE 5173
+# --- Nginx stage ---
+FROM nginx:1.25-alpine
+WORKDIR /usr/share/nginx/html
 
-# 啟動 Vue 開發伺服器
-CMD ["npm", "run", "dev", "--", "--host"]
+# 複製 Vue build 出來的 dist
+COPY --from=build /app/dist .
+
+# 複製你的 nginx 設定檔
+COPY ./nginx/default.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

@@ -2,7 +2,7 @@
     <div class="login-container">
         <el-card class="login-card">
             <h2 class="title">過濾調壓器製造數據管理平台</h2>
-            <el-form :model="form" ref="formRef" :rules="rules" label-width="80px">
+            <el-form :model="form" ref="formRef" :rules="rules" label-width="80px" @keydown.enter="onLogin">
                 <el-form-item label="帳號" prop="username">
                     <el-input v-model="form.username" placeholder="輸入帳號" />
                 </el-form-item>

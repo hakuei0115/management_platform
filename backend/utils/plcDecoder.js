@@ -21,7 +21,7 @@ export function codeConvert(result) {
     return map[result] || "未知";
 }
 
-function combineHL(low, high) {
+function combineHL(high, low) {
   return (high * 0x10000) + low;
 }
 
@@ -33,7 +33,7 @@ function signed16ToValue(val, scale = 1) {
 export function translateRecord(data) {
     try {
         // === 基本欄位 ===
-        const serial_no = combineHL(data.D001, data.D000);
+        const serial_no = combineHL(Number(data.D001), Number(data.D000));
         const station = data.D002;
         const recipe_channel = data.D003;
         const act_low = data.D004;
@@ -44,7 +44,7 @@ export function translateRecord(data) {
         // === 測試結果 ===
         const results = {};
         for (let i = 0; i < 12; i++) {
-            results[`m${(i + 1).toString().padStart(2, "0")}_result`] = codeConvert(data[`D${(8 + i).toString().padStart(3, "0")}`]);
+            results[`m${(i + 1).toString().padStart(2, "0")}`] = codeConvert(data[`D${(8 + i).toString().padStart(3, "0")}`]);
         }
 
         // === 各測試項目轉譯 ===
@@ -74,7 +74,7 @@ export function translateRecord(data) {
             M05,
             M08,
             M11,
-            RECdate: data.RECdate || "",
+            time: data.test_time,
         };
     } catch (err) {
         console.error("PLC 轉譯錯誤:", err);
