@@ -24,6 +24,7 @@ api.interceptors.response.use(
             console.warn('Token 已失效，自動登出')
             auth.logout();
             Swal.fire('錯誤', '登入已過期，請重新登入', 'warning');
+            window.location.href = '/login';
         }
 
         return Promise.reject(error)

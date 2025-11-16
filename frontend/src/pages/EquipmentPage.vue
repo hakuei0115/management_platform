@@ -95,7 +95,7 @@
         </el-drawer>
 
         <!-- 新增型號 Dialog -->
-        <el-dialog v-model="addDialogVisible" title="新增型號對照" width="400px">
+        <el-dialog v-model="addDialogVisible" title="新增型號對照" width="400px" @keydown.enter="submitAddMapping">
             <el-form :model="addForm" label-width="100px">
                 <el-form-item label="配方頻道" prop="channel" type="number" required>
                     <el-input v-model="addForm.channel" placeholder="請輸入配方頻道" />
@@ -115,7 +115,7 @@
 
 
         <!-- 新增/編輯表單 -->
-        <el-dialog v-model="dialogVisible" :title="editingDevice ? '編輯設備' : '新增設備'" width="500px">
+        <el-dialog v-model="dialogVisible" :title="editingDevice ? '編輯設備' : '新增設備'" width="500px" @keydown.enter="submitForm">
             <el-form :model="form" label-width="100px" :rules="rules" ref="formRef">
                 <el-form-item label="設備代號" prop="equipment_code">
                     <el-input v-model="form.equipment_code" />

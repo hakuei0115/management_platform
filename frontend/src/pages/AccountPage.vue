@@ -74,7 +74,6 @@ async function submitFom() {
     if (editingUser.value) {
         const roleId = userStore.getRoleIdByName(form.value.role);
         form.value.role = roleId;
-        console.log(form.value);
         await userStore.updateUser(editingUser.value.id, form.value);
         await userStore.fetchUsers();
         ElMessage.success("使用者更新成功");

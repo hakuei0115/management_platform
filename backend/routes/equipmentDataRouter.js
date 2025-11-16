@@ -13,7 +13,7 @@ router.get("/data", async (req, res) => {
             end_id,
             product_spec,
             start_time,
-            end_time
+            end_time,
         } = req.query;
 
         page = Number(page) || 1;
