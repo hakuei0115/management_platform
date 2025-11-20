@@ -14,7 +14,26 @@ router.get("/data", async (req, res) => {
             product_spec,
             start_time,
             end_time,
+            only_ng
         } = req.query;
+
+        // NG CODE (from PLC table)
+        const NG_SQL = `
+        (
+            D008 IN (11,13,15,16,17) OR
+            D009 IN (11,13,15,16,17) OR
+            D010 IN (11,13,15,16,17) OR
+            D011 IN (11,13,15,16,17) OR
+            D012 IN (11,13,15,16,17) OR
+            D013 IN (11,13,15,16,17) OR
+            D014 IN (11,13,15,16,17) OR
+            D015 IN (11,13,15,16,17) OR
+            D016 IN (11,13,15,16,17) OR
+            D017 IN (11,13,15,16,17) OR
+            D018 IN (11,13,15,16,17) OR
+            D019 IN (11,13,15,16,17)
+        )
+        `;
 
         page = Number(page) || 1;
         pageSize = Number(pageSize) || 20;
@@ -32,6 +51,7 @@ router.get("/data", async (req, res) => {
             whereParams.push(s, e);
         }
 
+        // 序號範圍
         const hasStartId = typeof start_id === "string" && start_id.trim() !== "";
         const hasEndId   = typeof end_id === "string" && end_id.trim() !== "";
 
@@ -49,6 +69,7 @@ router.get("/data", async (req, res) => {
             whereParams.push(s, e);
         }
 
+        // 型號 / D003
         if (product_spec && String(product_spec).trim() !== "") {
             const ch = Number(product_spec);
             if (!Number.isNaN(ch)) {
@@ -60,10 +81,16 @@ router.get("/data", async (req, res) => {
             }
         }
 
+        // 只看 NG
+        if (only_ng === "true") {
+            whereClauses.push(NG_SQL);
+        }
+
         const whereSQL = whereClauses.length
             ? "WHERE " + whereClauses.join(" AND ")
             : "";
 
+        // ========== count ==========
         const countSql = `
             SELECT COUNT(*) AS total
             FROM testresults
@@ -76,18 +103,13 @@ router.get("/data", async (req, res) => {
         if (total === 0) {
             return res.json({
                 success: true,
-                data: {
-                    page,
-                    pageSize,
-                    total,
-                    totalPages,
-                    records: []
-                }
+                data: { page, pageSize, total, totalPages, records: [] }
             });
         }
 
         const offset = (page - 1) * pageSize;
 
+        // ========== data ==========
         const dataSql = `
             SELECT *
             FROM testresults
@@ -105,13 +127,7 @@ router.get("/data", async (req, res) => {
 
         res.json({
             success: true,
-            data: {
-                page,
-                pageSize,
-                total,
-                totalPages,
-                records
-            }
+            data: { page, pageSize, total, totalPages, records }
         });
 
     } catch (err) {

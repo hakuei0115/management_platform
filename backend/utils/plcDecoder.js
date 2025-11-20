@@ -50,10 +50,10 @@ export function translateRecord(data) {
         // === 各測試項目轉譯 ===
         const decodeLeak = (judgeAddr, leakL, leakH, hi, lo, diffL, diffH) => ({
             judge: String.fromCharCode(data[judgeAddr]) || "",
-            leak: (combineHL(data[leakL], data[leakH]) / 1000).toFixed(3),
+            leak: (combineHL(data[leakH], data[leakL]) / 1000).toFixed(3),
             hi: signed16ToValue(data[hi], 10),
             lo: signed16ToValue(data[lo], 10),
-            diff: (combineHL(data[diffL], data[diffH]) / 1000).toFixed(3),
+            diff: (combineHL(data[diffH], data[diffL]) / 1000).toFixed(3),
         });
 
         const M04 = decodeLeak("D020", "D021", "D022", "D023", "D024", "D025", "D026");

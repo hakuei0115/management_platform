@@ -2,6 +2,10 @@ FROM node:22-slim
 
 WORKDIR /app
 
+ENV TZ=Asia/Taipei
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone
+
 # 安裝依賴（利用快取）
 COPY package*.json ./
 RUN npm install --production

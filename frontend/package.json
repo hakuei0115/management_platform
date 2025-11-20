@@ -19,11 +19,13 @@
     "dayjs-plugin-utc": "^0.1.2",
     "echarts": "^6.0.0",
     "element-plus": "^2.11.5",
+    "file-saver": "^2.0.5",
     "jwt-decode": "^4.0.0",
     "pinia": "^3.0.3",
     "sweetalert2": "^11.26.3",
     "vue": "^3.5.22",
-    "vue-router": "^4.6.3"
+    "vue-router": "^4.6.3",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.37.0",

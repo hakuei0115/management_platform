@@ -31,6 +31,7 @@ except Exception as e:
     logging.error(f"模型載入失敗: {str(e)}")
     raise e
 
+
 # =========================
 # NG 測試項目映射表
 # =========================
@@ -51,62 +52,52 @@ TEST_COLUMNS = {
 
 
 # =========================
-# 維修建議解析器（強化版）
+# 維修建議解析器
 # =========================
 def parse_repair_suggestion(text):
-    """
-    將維修建議拆解成 action / part / category
-    支援三種型態：
-    (A) 更換帽型蓋 → action + part
-    (B) D3環脫落 → 故障部位
-    (C) B機檢測NG → 系統異常
-    """
     if not isinstance(text, str) or text.strip() == "":
         return {"action": None, "part": None, "category": None}
 
     text = text.strip()
 
-    # (A) 動詞 + 名詞形式
+    # A. 動詞開頭 → action 類
     actions = ["更換", "吹淨", "清潔", "調整", "潤滑", "緊固"]
     for act in actions:
         if text.startswith(act):
-            part = text[len(act):].strip()
-            return {"action": act, "part": part, "category": "action"}
+            return {
+                "action": act,
+                "part": text[len(act):].strip(),
+                "category": "action"
+            }
 
-    # (C) 系統型異常
+    # C. 系統型異常（不算維修部位）
     system_keywords = ["B機", "系統", "程式", "停止", "偵測", "壓力", "NG"]
     if any(word in text for word in system_keywords):
         return {"action": None, "part": text, "category": "system"}
 
-    # (B) 其他 → 故障部位
+    # B. 其他 → 故障部位（也不算維修部位）
     return {"action": None, "part": text, "category": "fault"}
 
 
-def predict_topn(ng_key, n=5):
+# =========================
+# 單一 NG 項預測（完整機率）
+# =========================
+def predict_single_ng(ng_full, n=5):
     try:
-        X_sample = ohe.transform(pd.DataFrame({"NG項": [ng_key]}))
+        X_sample = ohe.transform(pd.DataFrame({"NG項": [ng_full]}))
         probs = rf.predict_proba(X_sample)[0]
 
         df_prob = pd.DataFrame({
-            "維修建議": le.classes_,
-            "機率": probs
-        })
+            "suggestion": le.classes_,
+            "probability": probs
+        }).sort_values("probability", ascending=False)
 
-        # 只挑訓練資料中出現過的維修建議（避免 0% 垃圾類別）
-        valid = df_train[df_train["NG項"] == ng_key]["維修建議"].unique()
-        df_filtered = (
-            df_prob[df_prob["維修建議"].isin(valid)]
-            .sort_values("機率", ascending=False)
-            .reset_index(drop=True)
-        )
-
-        # 套入你的解析器
         results = []
-        for _, row in df_filtered.head(n).iterrows():
-            parsed = parse_repair_suggestion(row["維修建議"])
+        for _, row in df_prob.head(n).iterrows():
+            parsed = parse_repair_suggestion(row["suggestion"])
             results.append({
-                "suggestion": row["維修建議"],
-                "probability": float(row["機率"]),
+                "suggestion": row["suggestion"],
+                "probability": float(row["probability"]),
                 "action": parsed["action"],
                 "part": parsed["part"],
                 "category": parsed["category"]
@@ -115,10 +106,13 @@ def predict_topn(ng_key, n=5):
         return results
 
     except Exception as e:
-        logging.error(f"predict_topn 錯誤: {str(e)}")
+        logging.error(f"predict_single_ng 錯誤: {str(e)}")
         return []
 
 
+# =========================
+# API Route
+# =========================
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
@@ -126,45 +120,58 @@ def predict():
         ng_items = data.get("ng_items", [])
         top_n = data.get("top_n", 5)
 
-        # ==============================
-        # ★ Step1: 先把代碼轉成完整測試名稱
-        # ==============================
-        translated_list = []
+        # === 0. 無 NG 項 ===
+        if not ng_items:
+            resp = {
+                "suggestions": "產品狀態良好，無須維修",
+                "parts": []
+            }
+            return jsonify({"success": True, "data": resp})
+
+        # === 1. NG 簡碼 → 全名 ===
+        translated = []
         for ng in ng_items:
-            if ng not in TEST_COLUMNS:
-                return jsonify({
-                    "success": False,
-                    "error": f"未知的 NG 項目：{ng}"
-                }), 400
+            key = ng.lower()
+            if key not in TEST_COLUMNS:
+                return jsonify({"success": False, "error": f"未知 NG 項目：{ng}"}), 400
+            translated.append(TEST_COLUMNS[key])
 
-            translated_list.append(TEST_COLUMNS[ng])
+        # === 2. 逐一 NG 預測 ===
+        all_predictions = []
+        for ng_full in translated:
+            all_predictions.extend(predict_single_ng(ng_full, top_n))
 
-        # ==============================
-        # ★ Step2: Sort（避免 M08+M11 與 M11+M08 被當不同）
-        # ==============================
-        translated_list_sorted = sorted(translated_list)
+        # === 3. 合併結果後排序 ===
+        df_all = pd.DataFrame(all_predictions).sort_values(
+            "probability", ascending=False
+        ).reset_index(drop=True)
 
-        # ==============================
-        # ★ Step3: 合併成 ng_key（模型吃這個）
-        # ==============================
-        ng_key = ", ".join(translated_list_sorted)
+        # === 4. 合併建議字串 ===
+        merged_suggestions_str = ", ".join(
+            [f"{row['suggestion']}({row['probability']:.2f})" for _, row in df_all.iterrows()]
+        )
 
-        # ==============================
-        # ★ Step4: 丟入模型做預測
-        # ==============================
-        predictions = predict_topn(ng_key, top_n)
+        # === 5. 可能維修部位（只取 action 類） ===
+        likely_parts = []
+        for _, row in df_all.iterrows():
+            if row["category"] == "action":  # 只加入「動詞類建議」
+                part = row["part"]
+                if part and part not in likely_parts:
+                    likely_parts.append(part)
 
-        # ==============================
+        # === 6. 回傳資料 ===
+        response_data = {
+            "suggestions": merged_suggestions_str,
+            "parts": likely_parts
+        }
+
         # Log
-        # ==============================
         log_record = {
             "timestamp": datetime.now().isoformat(),
             "model_version": MODEL_VERSION,
             "input_ng_items": ng_items,
-            "translated_items": translated_list_sorted,
-            "ng_key": ng_key,
-            "top_n": top_n,
-            "outputs": predictions
+            "translated_items": translated,
+            "outputs": response_data
         }
 
         pd.DataFrame([log_record]).to_csv(
@@ -176,32 +183,7 @@ def predict():
 
         logging.info(f"預測成功: {log_record}")
 
-        # === 5️⃣ 可能維修部位列表 ===
-        likely_parts = []
-        for item in predictions:
-            part = item["part"]
-            if part and part not in likely_parts:
-                likely_parts.append(part)
-
-        # === 6️⃣ suggestions 字串版 ===
-        suggestions_str_list = []
-        for item in predictions:
-            prob = f"{item['probability']:.2f}"
-            suggestions_str_list.append(f"{item['suggestion']}({prob})")
-
-        suggestions_str = ", ".join(suggestions_str_list)
-
-        # === 7️⃣ 回傳資料 ===
-        response_data = {
-            "suggestions": suggestions_str,     # ← 你要的字串
-            "parts": likely_parts
-        }
-
-        return jsonify({
-            "success": True,
-            "data": response_data,
-            "message": "prediction successful"
-        })
+        return jsonify({"success": True, "data": response_data})
 
     except Exception as e:
         error_msg = traceback.format_exc()
