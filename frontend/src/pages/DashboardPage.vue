@@ -33,7 +33,7 @@
         </el-form>
 
         <!-- 主表格（僅 50 筆 FIFO） -->
-        <el-table :data="rows" border height="70vh" :loading="loading">
+        <el-table :data="rows" border stripe height="70vh" :loading="loading" row-class-name="tableRowClass">
             <el-table-column prop="id" label="序號" width="100" />
             <el-table-column prop="timestamp" label="時間" width="180">
                 <template #default="{ row }">
@@ -210,5 +210,11 @@ onUnmounted(() => clearInterval(timer))
     flex-wrap: wrap;
     gap: 8px 16px;
     align-items: flex-end;
+}
+
+:deep(.el-table thead th) {
+    background-color: #687480;
+    color: #e3e7ec;
+    font-weight: bold;
 }
 </style>

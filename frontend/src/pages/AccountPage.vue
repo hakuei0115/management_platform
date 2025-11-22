@@ -4,7 +4,7 @@
             <el-button type="primary" @click="openForm()">新增使用者</el-button>
         </div>
 
-        <el-table :data="userStore.userList" border style="width: 100%">
+        <el-table :data="userStore.userList" border stripe style="width: 100%" row-class-name="tableRowClass">
             <el-table-column prop="name" label="姓名" width="80" />
             <el-table-column prop="email" label="Email" />
             <el-table-column prop="role" label="角色" width="120">
@@ -101,5 +101,11 @@ async function deleteUser(id) {
 .toolbar {
     margin-bottom: 12px;
     text-align: right;
+}
+
+:deep(.el-table thead th) {
+    background-color: #687480;
+    color: #e3e7ec;
+    font-weight: bold;
 }
 </style>

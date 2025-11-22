@@ -36,8 +36,6 @@ router.get("/equipments", async (_req, res) => {
             }
         });
 
-        console.log(equipment);
-
         res.json({ success: true, data: equipment, message: "取得設備列表成功" });
     } catch (error) {
         console.error("取得設備列表失敗:", error);

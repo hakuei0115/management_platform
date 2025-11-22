@@ -8,8 +8,8 @@
         </div>
 
         <!-- 表格區 -->
-        <el-table v-loading="loading" :data="filteredDevices" border row-key="id" style="width: 100%"
-            @expand-change="getStations">
+        <el-table v-loading="loading" :data="filteredDevices" border stripe row-key="id" style="width: 100%"
+            @expand-change="getStations" row-class-name="tableRowClass">
             <el-table-column type="expand">
                 <template #default="{ row }">
                     <div class="station-header">
@@ -58,7 +58,7 @@
 
         <!-- 型號對照表 Drawer -->
         <el-drawer v-model="drawerVisible" :title="activeDevice ? `型號對照表 - ${activeDevice.name}` : '型號對照表'" size="45%">
-            <el-table :data="modelMappingsStore.modelMappings[activeDevice?.id] || []" border height="70vh">
+            <el-table :data="modelMappingsStore.modelMappings[activeDevice?.id] || []" border stripe height="70vh">
                 <el-table-column prop="channel" label="配方頻道" width="120" />
 
                 <el-table-column label="型號">
@@ -448,5 +448,11 @@ async function removeDevice(id) {
 .el-table th,
 .el-table td {
     font-size: 15px;
+}
+
+:deep(.el-table thead th) {
+    background-color: #687480;
+    color: #e3e7ec;
+    font-weight: bold;
 }
 </style>

@@ -47,8 +47,8 @@
     </div>
 
     <!-- 資料表 -->
-    <el-table :data="rows" border height="70vh">
-      <el-table-column prop="id" label="序號" width="80" />
+    <el-table :data="rows" border stripe height="70vh" row-class-name="tableRowClass">
+      <el-table-column prop="id" label="序號" width="80"/>
 
       <el-table-column v-if="visibleColumns.includes('timestamp')" prop="timestamp" label="時間" width="180">
         <template #default="{ row }">
@@ -71,8 +71,7 @@
       </el-table-column>
 
       <!-- 12 個測試欄 -->
-      <el-table-column v-for="col in visibleTestColumns" :key="col.prop" :prop="col.prop" :label="col.label"
-        width="200">
+      <el-table-column v-for="col in visibleTestColumns" :key="col.prop" :prop="col.prop" :label="col.label" width="200">
         <template #default="{ row }">
           <el-tag v-if="row[col.prop].includes('不測試') || row[col.prop].includes('未測試')" type="info">{{ row[col.prop]
           }}</el-tag>
@@ -82,8 +81,7 @@
       </el-table-column>
 
       <!-- 洩漏量欄位 -->
-      <el-table-column v-for="col in visibleLeakColumns" :key="col.prop" :prop="col.prop" :label="col.label"
-        width="180" />
+      <el-table-column v-for="col in visibleLeakColumns" :key="col.prop" :prop="col.prop" :label="col.label" width="180" />
 
       <!-- 維修建議與可能部位 -->
       <el-table-column label="維修建議" prop="suggestion" width="160">
@@ -375,5 +373,11 @@ function exportExcel() {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+:deep(.el-table thead th) {
+    background-color: #687480;
+    color: #e3e7ec;
+    font-weight: bold;
 }
 </style>
