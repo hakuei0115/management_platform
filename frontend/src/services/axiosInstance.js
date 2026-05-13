@@ -20,7 +20,9 @@ api.interceptors.response.use(
     (error) => {
         const auth = useAuthStore()
 
-        if (error.response && [401, 403].includes(error.response.status)) {
+        const isLoginRequest = error.config?.url?.includes('/login')
+
+        if (!isLoginRequest && error.response && [401, 403].includes(error.response.status)) {
             console.warn('Token 已失效，自動登出')
             auth.logout();
             Swal.fire('錯誤', '登入已過期，請重新登入', 'warning');

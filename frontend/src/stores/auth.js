@@ -19,8 +19,9 @@ export const useAuthStore = defineStore('auth', () => {
                 sessionStorage.setItem('token', token.value);
                 return res;
             }
+            return res;
         } catch (error) {
-            return error || '登入失敗，請稍後再試。';
+            return error || { success: false, message: '登入失敗，請稍後再試。' };
         }
     }
 

@@ -2,7 +2,10 @@ import joblib
 import pandas as pd
 import logging
 import traceback
+import os
 from datetime import datetime
+from pathlib import Path
+from threading import Lock
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -10,9 +13,13 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 MODEL_VERSION = "v1.0.0"
+MODEL_PATH = Path(os.environ.get("MODEL_PATH", "model/rf_mcpr.pkl"))
+TRAINING_DATA_PATH = Path(os.environ.get("TRAINING_DATA_PATH", "data/NG項_最終維修建議對照.csv"))
+LOG_DIR = Path(os.environ.get("LOG_DIR", "logs"))
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
-    filename="logs/app.log",
+    filename=LOG_DIR / "app.log",
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
@@ -20,13 +27,55 @@ logging.basicConfig(
 # =========================
 # 模型載入
 # =========================
+rf = None
+ohe = None
+le = None
+df_train = pd.DataFrame()
+_model_mtime = None
+_data_mtime = None
+_asset_lock = Lock()
+
+
+def read_training_csv(path: Path) -> pd.DataFrame:
+    last_error = None
+    for encoding in ("utf-8-sig", "utf-8", "big5", "cp950"):
+        try:
+            return pd.read_csv(path, encoding=encoding)
+        except UnicodeDecodeError as exc:
+            last_error = exc
+            continue
+    raise ValueError(f"CSV 編碼無法辨識：{last_error}")
+
+
+def load_assets(force=False):
+    global rf, ohe, le, df_train, _model_mtime, _data_mtime, MODEL_VERSION
+
+    with _asset_lock:
+        model_mtime = MODEL_PATH.stat().st_mtime
+        if force or _model_mtime != model_mtime:
+            bundle = joblib.load(MODEL_PATH)
+            rf = bundle["model"]
+            ohe = bundle["onehot_encoder"]
+            le = bundle["label_encoder"]
+            metadata = bundle.get("metadata", {})
+            MODEL_VERSION = metadata.get("trained_at", MODEL_VERSION)
+            _model_mtime = model_mtime
+            logging.info(f"模型載入成功：{MODEL_PATH}")
+
+        if TRAINING_DATA_PATH.exists():
+            data_mtime = TRAINING_DATA_PATH.stat().st_mtime
+            if force or _data_mtime != data_mtime:
+                df_train = read_training_csv(TRAINING_DATA_PATH)
+                _data_mtime = data_mtime
+                logging.info(f"訓練資料載入成功：{TRAINING_DATA_PATH}")
+        else:
+            df_train = pd.DataFrame()
+            _data_mtime = None
+            logging.warning(f"找不到訓練資料 CSV：{TRAINING_DATA_PATH}")
+
+
 try:
-    bundle = joblib.load("model/rf_mcpr.pkl")
-    rf = bundle["model"]
-    ohe = bundle["onehot_encoder"]
-    le = bundle["label_encoder"]
-    df_train = pd.read_csv("NG項_最終維修建議對照.csv")
-    logging.info("模型載入成功")
+    load_assets(force=True)
 except Exception as e:
     logging.error(f"模型載入失敗: {str(e)}")
     raise e
@@ -116,6 +165,7 @@ def predict_single_ng(ng_full, n=5):
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
+        load_assets()
         data = request.get_json()
         ng_items = data.get("ng_items", [])
         top_n = data.get("top_n", 5)
@@ -175,7 +225,7 @@ def predict():
         }
 
         pd.DataFrame([log_record]).to_csv(
-            "logs/prediction_history.csv",
+            LOG_DIR / "prediction_history.csv",
             mode="a",
             index=False,
             header=False
@@ -196,4 +246,5 @@ def predict():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get("MODEL_PREDICT_PORT", "5001"))
+    app.run(host="0.0.0.0", port=port, debug=True)

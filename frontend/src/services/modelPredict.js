@@ -3,7 +3,7 @@ import api from './axiosInstance';
 export const ModelPredictAPI = {
     async predictModel(ng_items) {
         try {
-            const res = await api.post('http://localhost:5000/predict', { ng_items });
+            const res = await api.post('http://localhost:5001/predict', { ng_items });
 
             if (res.data.success) {
                 return res.data.data;

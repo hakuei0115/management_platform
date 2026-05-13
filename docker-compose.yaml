@@ -1,11 +1,9 @@
-version: "3.9"
-
 services:
     frontend:
         build: ./frontend
         container_name: mp_frontend
         ports:
-            - "80:80"
+            - "${FRONTEND_PORT:-80}:80"
         depends_on:
             - backend
             - model
@@ -17,6 +15,14 @@ services:
         container_name: mp_backend
         ports:
             - "3000:3000"
+        environment:
+            DB_HOST: ${DB_HOST}
+            DB_USER: ${DB_USER}
+            DB_PASS: ${DB_PASS}
+            DB_NAME: ${DB_NAME}
+            JWT_SECRET: ${JWT_SECRET}
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
         networks:
             - mp_net
 
@@ -24,7 +30,33 @@ services:
         build: ./model_predict
         container_name: mp_model
         ports:
-            - "5000:5000"
+            - "${MODEL_PORT:-5001}:5001"
+        environment:
+            MODEL_PREDICT_PORT: 5001
+            MODEL_PATH: /app/model/rf_mcpr.pkl
+            TRAINING_DATA_PATH: /app/data/NG項_最終維修建議對照.csv
+            LOG_DIR: /app/logs
+        volumes:
+            - ./model_predict/data:/app/data
+            - ./model_predict/model:/app/model
+            - ./model_predict/logs:/app/logs
+        networks:
+            - mp_net
+    
+    train_model:
+        build: ./train_model
+        container_name: mp_train_model
+        ports:
+            - "${TRAIN_MODEL_PORT:-8501}:8501"
+        environment:
+            MERGE_GUI_PORT: 8501
+            TRAIN_OUTPUT_DIR: /app/outputs
+            MODEL_PREDICT_DATA_DIR: /shared/model_predict/data
+            MODEL_PREDICT_MODEL_DIR: /shared/model_predict/model
+        volumes:
+            - ./train_model/outputs:/app/outputs
+            - ./model_predict/data:/shared/model_predict/data
+            - ./model_predict/model:/shared/model_predict/model
         networks:
             - mp_net
 

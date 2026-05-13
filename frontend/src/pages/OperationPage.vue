@@ -48,7 +48,7 @@
 
     <!-- 資料表 -->
     <el-table :data="rows" border stripe height="70vh" row-class-name="tableRowClass">
-      <el-table-column prop="id" label="序號" width="80"/>
+      <el-table-column prop="id" label="序號" width="80" fixed="left" />
 
       <el-table-column v-if="visibleColumns.includes('timestamp')" prop="timestamp" label="時間" width="180">
         <template #default="{ row }">
@@ -103,7 +103,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useEquipmentDataStore } from '@/stores/equipmentData'
 import { useModelPredictStore } from '@/stores/modelPredict'
 import { ElMessage } from 'element-plus'
@@ -119,7 +119,6 @@ const pageSize = ref(20)
 const total = ref(0)
 const loading = ref(false)
 const rows = ref([])
-let timer = null
 
 function formatSuggestion(text) {
   if (!text) return ''
@@ -267,11 +266,6 @@ function handleSizeChange(size) {
 
 onMounted(() => {
   fetchOperations()
-  timer = setInterval(fetchOperations, 10 * 1000)
-})
-
-onUnmounted(() => {
-  clearInterval(timer)
 })
 
 const testColumns = [
