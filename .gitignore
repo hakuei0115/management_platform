@@ -23,6 +23,7 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+*.sql
 
 *.tsbuildinfo
 
@@ -40,3 +41,6 @@ note.txt
 *.env.*
 .env.local
 .env.*.local
+*.pkl
+*.csv
+*.xlsx

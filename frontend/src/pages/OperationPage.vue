@@ -16,7 +16,7 @@
         </el-form-item>
 
         <el-form-item label="生產時段">
-          <el-date-picker v-model="filters.range" type="datetimerange" range-separator="至" start-placeholder="開始"
+          <el-date-picker v-model="filters.range" type="datetimerange" value-format="YYYY-MM-DD HH:mm:ss" range-separator="至" start-placeholder="開始"
             end-placeholder="結束" />
         </el-form-item>
 
@@ -50,7 +50,7 @@
     <el-table :data="rows" border stripe height="70vh" row-class-name="tableRowClass">
       <el-table-column prop="id" label="序號" width="80" fixed="left" />
 
-      <el-table-column v-if="visibleColumns.includes('timestamp')" prop="timestamp" label="時間" width="180">
+      <el-table-column v-if="visibleColumns.includes('timestamp')" prop="timestamp" label="時間" width="180" sortable :sort-method="(a, b) => new Date(a.timestamp) - new Date(b.timestamp)">
         <template #default="{ row }">
           {{ formatTime(row.timestamp) }}
         </template>
@@ -81,7 +81,9 @@
       </el-table-column>
 
       <!-- 洩漏量欄位 -->
-      <el-table-column v-for="col in visibleLeakColumns" :key="col.prop" :prop="col.prop" :label="col.label" width="180" />
+      <el-table-column v-if="visibleLeakColumns.length" label="洩漏量" align="center">
+        <el-table-column v-for="col in visibleLeakColumns" :key="col.prop" :prop="col.prop" :label="col.label" width="180" />
+      </el-table-column>
 
       <!-- 維修建議與可能部位 -->
       <el-table-column label="維修建議" prop="suggestion" width="160">
@@ -106,6 +108,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useEquipmentDataStore } from '@/stores/equipmentData'
 import { useModelPredictStore } from '@/stores/modelPredict'
+import { useModelMappingsStore } from '@/stores/modelMappings'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
@@ -113,6 +116,7 @@ import { saveAs } from 'file-saver'
 
 const equipmentDataStore = useEquipmentDataStore()
 const modelPredictStore = useModelPredictStore()
+const modelMappingsStore = useModelMappingsStore()
 
 const currentPage = ref(1)
 const pageSize = ref(20)
@@ -150,13 +154,19 @@ function extractNgItems(record) {
   return ng
 }
 
+function getModelName(channel, equipmentId = 1) {
+  const mappings = modelMappingsStore.modelMappings[equipmentId] || []
+  const found = mappings.find(m => Number(m.channel) === Number(channel))
+  return found ? found.model_name : channel
+}
+
 function mapRecord(r) {
   return {
     timestamp: r.time,
 
     id: r.serial_no,
     station_no: r.station,
-    product_spec: r.recipe_channel,
+    product_spec: getModelName(r.recipe_channel),
 
     M01: r.m01,
     M02: r.m02,
@@ -196,8 +206,8 @@ async function fetchOperations() {
     }
 
     if (filters.value.range?.length === 2) {
-      params.start_time = filters.value.range[0]
-      params.end_time = filters.value.range[1]
+      params.start_time = dayjs(filters.value.range[0]).format('YYYY-MM-DD HH:mm:ss')
+      params.end_time = dayjs(filters.value.range[1]).format('YYYY-MM-DD HH:mm:ss')
     }
 
     // 後端拿資料
@@ -264,30 +274,59 @@ function handleSizeChange(size) {
   fetchOperations()
 }
 
-onMounted(() => {
+onMounted(async () => {
+  if (!modelMappingsStore.modelMappings[1]) {
+    try {
+      await modelMappingsStore.fetchModelMappings(1)
+    } catch (err) {
+      console.warn('無法取得型號對照表:', err)
+    }
+  }
   fetchOperations()
 })
 
+// const testColumns = [
+//   { prop: 'M01', label: 'M01_低壓手動排水閥測試_測試結果' },
+//   { prop: 'M02', label: 'M02_高壓手動排水閥測試_測試結果' },
+//   { prop: 'M03', label: 'M03_低壓內漏調壓_測試結果' },
+//   { prop: 'M04', label: 'M04_低壓內漏測試_測試結果' },
+//   { prop: 'M05', label: 'M05_高壓內漏測試_測試結果' },
+//   { prop: 'M06', label: 'M06_低壓氣密調壓_測試結果' },
+//   { prop: 'M07', label: 'M07_低壓錶孔測試_測試結果' },
+//   { prop: 'M08', label: 'M08_低壓氣密測試_測試結果' },
+//   { prop: 'M09', label: 'M09_高壓氣密調壓_測試結果' },
+//   { prop: 'M10', label: 'M10_高壓錶孔測試_測試結果' },
+//   { prop: 'M11', label: 'M11_高壓氣密測試_測試結果' },
+//   { prop: 'M12', label: 'M12_測試完成調壓_測試結果' },
+// ]
+
+// const leakColumns = [
+//   { prop: 'M04_leak', label: 'M04_低壓內漏測試_洩漏量' },
+//   { prop: 'M05_leak', label: 'M05_高壓內漏測試_洩漏量' },
+//   { prop: 'M08_leak', label: 'M08_低壓氣密測試_洩漏量' },
+//   { prop: 'M11_leak', label: 'M11_高壓氣密測試_洩漏量' },
+// ]
+
 const testColumns = [
-  { prop: 'M01', label: 'M01_低壓手動排水閥測試_測試結果' },
-  { prop: 'M02', label: 'M02_高壓手動排水閥測試_測試結果' },
-  { prop: 'M03', label: 'M03_低壓內漏調壓_測試結果' },
-  { prop: 'M04', label: 'M04_低壓內漏測試_測試結果' },
-  { prop: 'M05', label: 'M05_高壓內漏測試_測試結果' },
-  { prop: 'M06', label: 'M06_低壓氣密調壓_測試結果' },
-  { prop: 'M07', label: 'M07_低壓錶孔測試_測試結果' },
-  { prop: 'M08', label: 'M08_低壓氣密測試_測試結果' },
-  { prop: 'M09', label: 'M09_高壓氣密調壓_測試結果' },
-  { prop: 'M10', label: 'M10_高壓錶孔測試_測試結果' },
-  { prop: 'M11', label: 'M11_高壓氣密測試_測試結果' },
-  { prop: 'M12', label: 'M12_測試完成調壓_測試結果' },
+  { prop: 'M01', label: 'm01' },
+  { prop: 'M02', label: 'm02' },
+  { prop: 'M03', label: 'm03' },
+  { prop: 'M04', label: 'm04' },
+  { prop: 'M05', label: 'm05' },
+  { prop: 'M06', label: 'm06' },
+  { prop: 'M07', label: 'm07' },
+  { prop: 'M08', label: 'm08' },
+  { prop: 'M09', label: 'm09' },
+  { prop: 'M10', label: 'm10' },
+  { prop: 'M11', label: 'm11' },
+  { prop: 'M12', label: 'm12' },
 ]
 
 const leakColumns = [
-  { prop: 'M04_leak', label: 'M04_低壓內漏測試_洩漏量' },
-  { prop: 'M05_leak', label: 'M05_高壓內漏測試_洩漏量' },
-  { prop: 'M08_leak', label: 'M08_低壓氣密測試_洩漏量' },
-  { prop: 'M11_leak', label: 'M11_高壓氣密測試_洩漏量' },
+  { prop: 'M04_leak', label: 'm04_leak' },
+  { prop: 'M05_leak', label: 'm05_leak' },
+  { prop: 'M08_leak', label: 'm08_leak' },
+  { prop: 'M11_leak', label: 'm11_leak' },
 ]
 
 const allColumns = [
@@ -369,7 +408,8 @@ function exportExcel() {
   gap: 4px;
 }
 
-:deep(.el-table thead th) {
+:deep(.el-table thead th),
+:deep(.el-table thead.is-group th.el-table__cell)  {
     background-color: #687480;
     color: #e3e7ec;
     font-weight: bold;

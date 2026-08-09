@@ -114,7 +114,7 @@ router.get("/data", async (req, res) => {
             SELECT *
             FROM testresults
             ${whereSQL}
-            ORDER BY id DESC
+            ORDER BY test_time DESC, id DESC
             LIMIT ? OFFSET ?
         `;
         const dataParams = [...whereParams, pageSize, offset];

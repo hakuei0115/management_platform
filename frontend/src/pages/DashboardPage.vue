@@ -165,7 +165,7 @@ function resetFilter() {
     fetchData(false)
 }
 
-/** ⭐ 定時更新：每 10 秒拉一次新資料，採 FIFO */
+/** ⭐ 定時更新：每 60 秒拉一次新資料，採 FIFO */
 async function tick() {
     console.log("⏱ 自動刷新資料...")
 
@@ -188,7 +188,7 @@ async function tick() {
 
 onMounted(() => {
     fetchData(false)
-    timer = setInterval(tick, 10 * 1000)
+    timer = setInterval(tick, 60 * 1000)
 })
 onUnmounted(() => clearInterval(timer))
 </script>
