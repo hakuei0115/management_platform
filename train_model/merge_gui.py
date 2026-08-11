@@ -11,6 +11,9 @@ import pandas as pd
 from excel_merge_pipeline import dataframe_to_excel_bytes, merge_excel_sources
 from generate_ng_rules import generate_ng_rules
 from rf_mcpr_training import train_rf_mcpr
+from open_set_rf_training import train_open_set_rf_mcpr
+from admdp_training import train_admdp_from_excel, train_admdp_policy
+from admdp_dataset import build_admdp_transitions
 
 
 app = Flask(__name__)
@@ -27,6 +30,8 @@ MODEL_PREDICT_MODEL_DIR = Path(
 )
 RULES_FILENAME = os.environ.get("MODEL_RULES_FILENAME", "NG項_最終維修建議對照.csv")
 MODEL_FILENAME = os.environ.get("MODEL_FILENAME", "rf_mcpr.pkl")
+OPEN_SET_MODEL_FILENAME = "open_set_rf_mcpr.pkl"
+ADMDP_MODEL_FILENAME = "admdp_policy.pkl"
 
 MODEL_PREDICT_DATA_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_PREDICT_MODEL_DIR.mkdir(parents=True, exist_ok=True)
@@ -38,7 +43,7 @@ PAGE_TEMPLATE = """
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RF-MCPR 訓練工具</title>
+  <title>AI 多模型一體化訓練工具</title>
   <style>
     :root {
       color-scheme: light;
@@ -138,6 +143,18 @@ PAGE_TEMPLATE = """
       text-decoration: none;
       cursor: pointer;
     }
+    button.btn-sec {
+      background: #4b5563;
+    }
+    button.btn-sec:hover {
+      background: #374151;
+    }
+    button.btn-success {
+      background: #059669;
+    }
+    button.btn-success:hover {
+      background: #047857;
+    }
     button:hover, .download-link:hover {
       background: var(--accent-strong);
     }
@@ -182,29 +199,6 @@ PAGE_TEMPLATE = """
       background: #f0fff7;
       color: var(--ok);
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 14px;
-      font-size: 13px;
-    }
-    th, td {
-      border-bottom: 1px solid var(--line);
-      padding: 9px 8px;
-      text-align: left;
-      vertical-align: top;
-    }
-    th {
-      color: var(--muted);
-      font-weight: 700;
-      background: #fbfcfe;
-    }
-    .warnings {
-      margin: 14px 0 0;
-      padding-left: 18px;
-      color: var(--warn);
-      font-size: 13px;
-    }
     .button-row {
       display: flex;
       flex-wrap: wrap;
@@ -223,9 +217,7 @@ PAGE_TEMPLATE = """
       align-items: center;
       font-size: 13px;
     }
-    .bar-label {
-      overflow-wrap: anywhere;
-    }
+    .bar-label { overflow-wrap: anywhere; }
     .bar-track {
       height: 12px;
       border-radius: 999px;
@@ -252,6 +244,57 @@ PAGE_TEMPLATE = """
       background: var(--line);
       margin: 18px 0;
     }
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .loading-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .spinner-card {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 36px 44px;
+      text-align: center;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      max-width: 380px;
+    }
+    .spinner {
+      width: 52px;
+      height: 52px;
+      margin: 0 auto 20px;
+      border: 5px solid #e2e8f0;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .loading-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .loading-subtext {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
     @media (max-width: 860px) {
       main { grid-template-columns: 1fr; }
       .metrics { grid-template-columns: 1fr; }
@@ -260,103 +303,148 @@ PAGE_TEMPLATE = """
   </style>
   </head>
   <body>
-    <header>
-    <h1>RF-MCPR 訓練工具</h1>
-  </header>
-  <main>
-    <div class="stack">
-    <section>
-      <h2>建立訓練資料集</h2>
-      {% if mode == "dataset" and error %}
-        <div class="message error">{{ error }}</div>
-      {% elif mode == "dataset" and (output_file or stats_file) %}
-        <div class="message ok">
-          {% if output_file %}已建立 {{ output_file }}{% endif %}
-          {% if stats_file %}已建立 {{ stats_file }}，並更新 {{ shared_rules_path }}{% endif %}
-        </div>
-      {% else %}
-        <div class="message">異常編號會自動轉換格式。</div>
-      {% endif %}
-      <form method="post" action="{{ url_for('merge') }}" enctype="multipart/form-data">
-        <label for="files">Excel 檔案</label>
-        <input id="files" name="files" type="file" accept=".xlsx" multiple required>
-        <div class="options">
-          <label class="check">
-            <input type="checkbox" name="include_source_columns">
-            <span>輸出來源檔案、工作表、原始異常編號</span>
-          </label>
-          <label class="check">
-            <input type="checkbox" name="keep_extra_columns">
-            <span>保留非 train_data 樣板欄位</span>
-          </label>
-        </div>
-        <div class="button-row">
-          <button type="submit" name="action" value="merge">產生合併 Excel</button>
-          <button type="submit" name="action" value="stats">產生 NG 對照 CSV</button>
-          {% if output_file %}
-            <a class="download-link" href="{{ url_for('download_file', filename=output_file) }}">下載結果</a>
-          {% endif %}
-          {% if mode == "dataset" and stats_file %}
-            <a class="download-link" href="{{ url_for('download_file', filename=stats_file) }}">下載 CSV</a>
-          {% endif %}
-        </div>
-      </form>
-    </section>
-
-    <section>
-      <h2>訓練 RF-MCPR</h2>
-      {% if mode == "csv_train" and error %}
-        <div class="message error">{{ error }}</div>
-      {% elif mode == "csv_train" and training %}
-        <div class="message ok">模型已儲存到 {{ shared_model_path }}，並更新 {{ shared_rules_path }}</div>
-      {% else %}
-        <div class="message">上傳已建立好的 NG項_最終維修建議對照.csv 來訓練模型。</div>
-      {% endif %}
-      <form method="post" action="{{ url_for('train_from_csv') }}" enctype="multipart/form-data">
-        <label for="rules_file">NG項_最終維修建議對照.csv</label>
-        <input id="rules_file" name="rules_file" type="file" accept=".csv" required>
-        <div class="button-row" style="margin-top: 16px;">
-          <button type="submit">用 CSV 訓練 RF-MCPR</button>
-        </div>
-      </form>
-    </section>
+    <!-- 全螢幕 Loading 載入等待遮罩 -->
+    <div id="loadingOverlay" class="loading-overlay">
+      <div class="spinner-card">
+        <div class="spinner"></div>
+        <div id="loadingTitle" class="loading-title">AI 計算中，請稍候...</div>
+        <div class="loading-subtext">正在進行模型計算與權重寫入，請勿關閉或刷新網頁</div>
+      </div>
     </div>
 
-    <section>
-      <h2>統計資料</h2>
-      {% if error and mode not in ["dataset", "csv_train"] %}
-        <div class="message error">{{ error }}</div>
-      {% endif %}
-      <div class="metrics">
-        <div class="metric"><strong>{{ summary.loaded_sheets }}</strong><span>已讀工作表</span></div>
-        <div class="metric"><strong>{{ summary.skipped_sheets }}</strong><span>略過工作表</span></div>
-        <div class="metric"><strong>{{ summary.output_rows }}</strong><span>輸出列數</span></div>
-        <div class="metric"><strong>{{ summary.unique_cases }}</strong><span>異常案例數</span></div>
+    <header>
+      <h1>AI 多模型一體化訓練工具 (RF-MCPR + Open-Set + ADMDP)</h1>
+    </header>
+    <main>
+      <div class="stack">
+        <!-- 步驟 1：資料集處理區塊 -->
+        <section>
+          <h2>步驟 1：資料集處理 (Excel 合併與資料集生成)</h2>
+          {% if mode == "dataset" and error %}
+            <div class="message error">{{ error }}</div>
+          {% elif mode == "dataset" and (output_file or stats_file) %}
+            <div class="message ok">
+              {% if output_file %}✅ 已成功產生合併 Excel: {{ output_file }}<br>{% endif %}
+              {% if stats_file %}✅ 已成功產生全套訓練資料集 (NG對照表 + ADMDP轉移鏈集)，並同步更新至 model_predict/data/{% endif %}
+            </div>
+          {% else %}
+            <div class="message">上傳產線原始 Excel 檔案，可選擇僅合併 Excel 或生成全套訓練資料集。</div>
+          {% endif %}
+          <form method="post" action="{{ url_for('merge') }}" enctype="multipart/form-data">
+            <label for="files">Excel 檔案 (.xlsx)</label>
+            <input id="files" name="files" type="file" accept=".xlsx" multiple required>
+            <div class="options">
+              <label class="check">
+                <input type="checkbox" name="include_source_columns">
+                <span>輸出來源檔案、工作表、原始異常編號</span>
+              </label>
+              <label class="check">
+                <input type="checkbox" name="keep_extra_columns">
+                <span>保留非 train_data 樣板欄位</span>
+              </label>
+            </div>
+            <div class="button-row">
+              <button type="submit" name="action" value="merge" class="btn-sec">產生合併 Excel</button>
+              <button type="submit" name="action" value="dataset">產生訓練集 (NG對照, ADMDP轉移鏈, 開集識別)</button>
+              {% if output_file %}
+                <a class="download-link" href="{{ url_for('download_file', filename=output_file) }}">下載 Excel</a>
+              {% endif %}
+              {% if stats_file %}
+                <a class="download-link" href="{{ url_for('download_file', filename=stats_file) }}">下載 NG對照 CSV</a>
+              {% endif %}
+              {% if admdp_ds_file %}
+                <a class="download-link" href="{{ url_for('download_file', filename=admdp_ds_file) }}">下載 ADMDP轉移鏈 CSV</a>
+              {% endif %}
+            </div>
+          </form>
+        </section>
+
+        <!-- 步驟 2：AI 模型訓練區塊 -->
+        <section>
+          <h2>步驟 2：AI 模型訓練專區</h2>
+          {% if mode == "csv_train" and error %}
+            <div class="message error">{{ error }}</div>
+          {% elif mode == "csv_train" and trained_msg %}
+            <div class="message ok">
+              {{ trained_msg|safe }}
+            </div>
+          {% else %}
+            <div class="message">上傳對應訓練資料集進行訓練。<strong>一鍵全套訓練</strong> 需同時具備 <code>NG對照表</code> 與 <code>ADMDP 轉移鏈 CSV</code>。</div>
+          {% endif %}
+          <form method="post" action="{{ url_for('train_from_csv') }}" enctype="multipart/form-data">
+            <label for="rules_file">1. NG項_最終維修建議對照.csv (用於 RF-MCPR 與 Open-Set)</label>
+            <input id="rules_file" name="rules_file" type="file" accept=".csv">
+            
+            <label for="admdp_file" style="margin-top: 14px;">2. admdp_transitions.csv 轉移鏈檔 (用於 ADMDP，可選擇上傳或使用步驟 1 產生檔)</label>
+            <input id="admdp_file" name="admdp_file" type="file" accept=".csv">
+            
+            <div style="margin-top: 18px;">
+              <button type="submit" name="train_target" value="all" class="btn-success" style="width: 100%; font-size: 15px;">
+                🚀 一鍵訓練全套 AI 模型 (RF-MCPR + Open-Set + ADMDP)
+              </button>
+            </div>
+
+            <div class="divider"></div>
+            
+            <label>獨立單獨訓練專區：</label>
+            <div class="button-row">
+              <button type="submit" name="train_target" value="rf" class="btn-sec">🟢 單獨訓練 RF-MCPR</button>
+              <button type="submit" name="train_target" value="openset" class="btn-sec">🛡️ 單獨訓練 Open-Set 開集識別</button>
+              <button type="submit" name="train_target" value="admdp" class="btn-sec">🔄 單獨訓練 ADMDP 馬可夫決策</button>
+            </div>
+          </form>
+        </section>
       </div>
-      {% if rule_stats %}
-        <h2 style="margin-top: 20px;">統計資料</h2>
-        <div class="metrics">
-          <div class="metric"><strong>{{ rule_stats.output_rows }}</strong><span>NG 對照列數</span></div>
-          <div class="metric"><strong>{{ rule_stats.unique_ng_items }}</strong><span>NG 組合數</span></div>
-          <div class="metric"><strong>{{ rule_stats.unique_repairs }}</strong><span>維修建議數</span></div>
-          <div class="metric"><strong>{{ rule_stats.groups_with_pass }}</strong><span>有 PASS 案例</span></div>
-        </div>
-      {% endif %}
-      {% if training %}
-        <h2 style="margin-top: 20px;">RF-MCPR 評估</h2>
-        <div class="metrics">
-          <div class="metric"><strong>{{ percent(training.metrics.accuracy) }}</strong><span>Accuracy</span></div>
-          <div class="metric"><strong>{{ percent(training.metrics.precision_weighted) }}</strong><span>Weighted Precision</span></div>
-          <div class="metric"><strong>{{ percent(training.metrics.recall_weighted) }}</strong><span>Weighted Recall</span></div>
-          <div class="metric"><strong>{{ percent(training.metrics.f1_weighted) }}</strong><span>Weighted F1</span></div>
-        </div>
-        <p class="subtle">
-          評估切分：{{ training.metrics.split_strategy }}，
-          訓練 {{ training.metrics.train_rows }} 筆，測試 {{ training.metrics.test_rows }} 筆。
-          模型已儲存：{{ training.model_path }}
-        </p>
-        {% if training.class_metrics %}
-          <h2 style="margin-top: 20px;">類別召回率</h2>
+
+      <!-- 統計資料與模型評估看板 -->
+      <section>
+        <h2>模型評估與統計數據看板</h2>
+        {% if error and mode not in ["dataset", "csv_train"] %}
+          <div class="message error">{{ error }}</div>
+        {% endif %}
+
+        {% if rule_stats %}
+          <h2 style="margin-top: 10px;">資料集規模統計</h2>
+          <div class="metrics">
+            <div class="metric"><strong>{{ rule_stats.output_rows }}</strong><span>NG 對照總筆數</span></div>
+            <div class="metric"><strong>{{ rule_stats.unique_ng_items }}</strong><span>獨立 NG 組合數</span></div>
+            <div class="metric"><strong>{{ rule_stats.unique_repairs }}</strong><span>維修建議類別數</span></div>
+            <div class="metric"><strong>{{ rule_stats.groups_with_pass }}</strong><span>有 PASS 紀錄案例</span></div>
+          </div>
+        {% endif %}
+
+        {% if training %}
+          <h2 style="margin-top: 20px;">RF-MCPR 主模型評估 (靜態診斷)</h2>
+          <div class="metrics">
+            <div class="metric"><strong>{{ percent(training.metrics.accuracy) }}</strong><span>Accuracy</span></div>
+            <div class="metric"><strong>{{ percent(training.metrics.precision_weighted) }}</strong><span>Weighted Precision</span></div>
+            <div class="metric"><strong>{{ percent(training.metrics.recall_weighted) }}</strong><span>Weighted Recall</span></div>
+            <div class="metric"><strong>{{ percent(training.metrics.f1_weighted) }}</strong><span>Weighted F1</span></div>
+          </div>
+          <p class="subtle">
+            切分策略：{{ training.metrics.split_strategy }} | 訓練集: {{ training.metrics.train_rows }} 筆 | 測試集: {{ training.metrics.test_rows }} 筆
+          </p>
+        {% endif %}
+
+        {% if open_set_training %}
+          <h2 style="margin-top: 20px;">Open-Set 開集識別評估 (防衛門衛)</h2>
+          <div class="metrics">
+            <div class="metric"><strong>{{ percent(open_set_training.non_unknown_coverage) }}</strong><span>高信心覆蓋率</span></div>
+            <div class="metric"><strong>{{ percent(open_set_training.confident_accuracy) if open_set_training.confident_accuracy else 'N/A' }}</strong><span>高信心準確率</span></div>
+            <div class="metric"><strong>{{ open_set_training.unknown_count }} 筆</strong><span>開集未知阻斷數</span></div>
+            <div class="metric"><strong>{{ open_set_training.total_rows }} 筆</strong><span>驗證總筆數</span></div>
+          </div>
+        {% endif %}
+
+        {% if admdp_trained %}
+          <h2 style="margin-top: 20px;">ADMDP 馬可夫動態決策模型 (動態追蹤)</h2>
+          <div class="message ok">
+            ✅ 吸收馬可夫動態決策鏈 Policy 已成功訓練並儲存至 <code>model_predict/model/admdp_policy.pkl</code>！
+          </div>
+        {% endif %}
+
+        {% if training and training.class_metrics %}
+          <h2 style="margin-top: 20px;">類別召回率 Top-10</h2>
           <div class="chart">
             {% for item in training.class_metrics[:10] %}
               <div class="bar-row">
@@ -369,70 +457,36 @@ PAGE_TEMPLATE = """
             {% endfor %}
           </div>
         {% endif %}
-        {% if training.top_repair_counts %}
-          <h2 style="margin-top: 20px;">維修建議分布</h2>
-          <div class="chart">
-            {% for item in training.top_repair_counts %}
-              <div class="bar-row">
-                <div class="bar-label">{{ item.label }}</div>
-                <div class="bar-track">
-                  <div class="bar-fill" style="width: {{ count_width(item.count, training.top_repair_counts) }}%;"></div>
-                </div>
-                <div>{{ item.count }}</div>
-              </div>
-            {% endfor %}
-          </div>
-        {% endif %}
-        {% if training.top_ng_counts %}
-          <h2 style="margin-top: 20px;">NG 組合分布</h2>
-          <div class="chart">
-            {% for item in training.top_ng_counts %}
-              <div class="bar-row">
-                <div class="bar-label">{{ item.label }}</div>
-                <div class="bar-track">
-                  <div class="bar-fill" style="width: {{ count_width(item.count, training.top_ng_counts) }}%;"></div>
-                </div>
-                <div>{{ item.count }}</div>
-              </div>
-            {% endfor %}
-          </div>
-        {% endif %}
-      {% endif %}
-      {% if warnings %}
-        <ul class="warnings">
-          {% for warning in warnings[:6] %}
-            <li>{{ warning }}</li>
-          {% endfor %}
-          {% if warnings|length > 6 %}
-            <li>另有 {{ warnings|length - 6 }} 筆提醒</li>
-          {% endif %}
-        </ul>
-      {% endif %}
-      {% if reports %}
-        <table>
-          <thead>
-            <tr>
-              <th>檔案</th>
-              <th>工作表</th>
-              <th>狀態</th>
-              <th>列數</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for report in reports[:12] %}
-              <tr>
-                <td>{{ report.file_name }}</td>
-                <td>{{ report.sheet_name }}</td>
-                <td>{{ "已讀" if report.status == "loaded" else report.reason }}</td>
-                <td>{{ report.rows }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% endif %}
-    </section>
-  </main>
-</body>
+      </section>
+    </main>
+
+    <script>
+      document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+          const submitter = e.submitter;
+          let title = '資料處理中，請稍候...';
+          if (submitter) {
+            const val = submitter.value;
+            if (val === 'all') {
+              title = '🚀 全套 AI 模型一體化訓練中...';
+            } else if (val === 'rf') {
+              title = '🟢 主模型 RF-MCPR 訓練中...';
+            } else if (val === 'openset') {
+              title = '🛡️ 開集識別 Open-Set 訓練中...';
+            } else if (val === 'admdp') {
+              title = '🔄 ADMDP 馬可夫決策鏈訓練中...';
+            } else if (val === 'dataset') {
+              title = '📁 解析產線紀錄 & 建立全套訓練集...';
+            } else if (val === 'merge') {
+              title = '📊 產線原始 Excel 合併中...';
+            }
+          }
+          document.getElementById('loadingTitle').innerText = title;
+          document.getElementById('loadingOverlay').classList.add('active');
+        });
+      });
+    </script>
+  </body>
 </html>
 """
 
@@ -461,21 +515,47 @@ def merge():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     action = request.form.get("action", "merge")
 
-    if action == "stats":
+    if action == "dataset":
         try:
             rules, rule_stats = generate_ng_rules(result.dataframe)
         except Exception as exc:
             return render_page(error=f"建立統計資料失敗：{exc}", result=result)
 
+        # 1. 產生 NG對照表 CSV
         stats_name = f"NG項_最終維修建議對照_{timestamp}.csv"
         stats_path = output_path_for(stats_name)
         rules.to_csv(stats_path, index=False, encoding="utf-8-sig")
         write_shared_rules_csv(rules)
-        return render_page(result=result, stats_file=stats_name, rule_stats=rule_stats.as_dict(), mode="dataset")
+
+        # 2. 產生 合併 Excel
+        output_name = f"merged_train_data_{timestamp}.xlsx"
+        output_path = output_path_for(output_name)
+        output_path.write_bytes(dataframe_to_excel_bytes(result.dataframe))
+
+        # 3. 產生 ADMDP 狀態轉移鏈 CSV
+        admdp_ds_name = f"admdp_transitions_{timestamp}.csv"
+        admdp_ds_path = output_path_for(admdp_ds_name)
+        try:
+            admdp_res = build_admdp_transitions(result.dataframe)
+            admdp_res.transitions.to_csv(admdp_ds_path, index=False, encoding="utf-8-sig")
+            admdp_res.transitions.to_csv(MODEL_PREDICT_DATA_DIR / "admdp_transitions.csv", index=False, encoding="utf-8-sig")
+        except Exception as admdp_ds_err:
+            print("⚠️ ADMDP 轉移鏈資料集生成提醒:", admdp_ds_err)
+            admdp_ds_name = ""
+
+        return render_page(
+            result=result,
+            output_file=output_name,
+            stats_file=stats_name,
+            admdp_ds_file=admdp_ds_name,
+            rule_stats=rule_stats.as_dict(),
+            mode="dataset",
+        )
 
     output_name = f"merged_train_data_{timestamp}.xlsx"
     output_path = output_path_for(output_name)
     output_path.write_bytes(dataframe_to_excel_bytes(result.dataframe))
+
     return render_page(result=result, output_file=output_name, mode="dataset")
 
 
@@ -487,26 +567,109 @@ def download_file(filename: str):
 
 @app.post("/train-from-csv")
 def train_from_csv():
-    upload = request.files.get("rules_file")
-    if upload is None or not upload.filename:
-        return render_page(error="請選擇 NG項_最終維修建議對照.csv", mode="csv_train")
+    train_target = request.form.get("train_target", "all")
+    rules_upload = request.files.get("rules_file")
+    admdp_upload = request.files.get("admdp_file")
 
-    try:
-        content = upload.read()
-        rules = read_rules_csv(content)
+    training = None
+    open_set_training = None
+    admdp_trained = False
+    trained_messages = []
+
+    # 1. 讀取或保存上傳的 rules CSV (NG對照表)
+    rules = None
+    if rules_upload and rules_upload.filename:
+        try:
+            content = rules_upload.read()
+            rules = read_rules_csv(content)
+            write_shared_rules_csv(rules)
+        except Exception as exc:
+            return render_page(error=f"讀取 NG對照表 CSV 失敗：{exc}", mode="csv_train")
+    elif shared_rules_path().exists():
+        try:
+            rules = pd.read_csv(shared_rules_path(), encoding="utf-8-sig")
+        except Exception:
+            pass
+
+    # 2. 讀取或保存上傳的 admdp CSV (轉移鏈檔)
+    admdp_trans_df = None
+    if admdp_upload and admdp_upload.filename:
+        try:
+            admdp_content = admdp_upload.read()
+            admdp_trans_df = pd.read_csv(BytesIO(admdp_content), encoding="utf-8-sig")
+            admdp_trans_df.to_csv(MODEL_PREDICT_DATA_DIR / "admdp_transitions.csv", index=False, encoding="utf-8-sig")
+        except Exception as exc:
+            return render_page(error=f"讀取 ADMDP 轉移鏈 CSV 失敗：{exc}", mode="csv_train")
+    elif (MODEL_PREDICT_DATA_DIR / "admdp_transitions.csv").exists():
+        try:
+            admdp_trans_df = pd.read_csv(MODEL_PREDICT_DATA_DIR / "admdp_transitions.csv", encoding="utf-8-sig")
+        except Exception:
+            pass
+
+    # === 一鍵訓練全套 AI 模型 (Mandatory Requirement) ===
+    if train_target == "all":
+        if rules is None:
+            return render_page(error="⚠️ 一鍵訓練全套 AI 需提供【1. NG項_最終維修建議對照.csv】，請選擇上傳或先於步驟 1 產生訓練集！", mode="csv_train")
+        if admdp_trans_df is None:
+            return render_page(error="⚠️ 一鍵訓練全套 AI 需同時提供【2. admdp_transitions.csv 轉移鏈檔】，請選擇上傳或先於步驟 1 產生訓練集！", mode="csv_train")
+
+        try:
+            # 🟢 1. 訓練 RF-MCPR 主模型
+            training = train_rf_mcpr(rules, model_path=shared_model_path())
+            trained_messages.append("1. 主模型 <code>rf_mcpr.pkl</code> 訓練完成")
+
+            # 🛡️ 2. 訓練 Open-Set 開集識別
+            open_set_res = train_open_set_rf_mcpr(rules, model_path=MODEL_PREDICT_MODEL_DIR / OPEN_SET_MODEL_FILENAME)
+            open_set_training = open_set_res.validation
+            trained_messages.append("2. 開集識別模型 <code>open_set_rf_mcpr.pkl</code> 訓練完成")
+
+            # 🔄 3. 訓練 ADMDP 馬可夫動態決策
+            train_admdp_policy(admdp_trans_df, model_path=MODEL_PREDICT_MODEL_DIR / ADMDP_MODEL_FILENAME)
+            admdp_trained = True
+            trained_messages.append("3. 馬可夫動態決策 <code>admdp_policy.pkl</code> 訓練完成")
+
+        except Exception as exc:
+            return render_page(error=f"全套模型訓練失敗：{exc}", mode="csv_train")
+
+    elif train_target == "rf":
+        if rules is None:
+            return render_page(error="請上傳【1. NG項_最終維修建議對照.csv】以進行 RF-MCPR 訓練", mode="csv_train")
         training = train_rf_mcpr(rules, model_path=shared_model_path())
-    except Exception as exc:
-        return render_page(error=f"用 CSV 訓練 RF-MCPR 失敗：{exc}", mode="csv_train")
+        trained_messages.append("1. 主模型 <code>rf_mcpr.pkl</code> 訓練完成")
 
-    write_shared_rules_csv(rules)
+    elif train_target == "openset":
+        if rules is None:
+            return render_page(error="請上傳【1. NG項_最終維修建議對照.csv】以進行 Open-Set 訓練", mode="csv_train")
+        open_set_res = train_open_set_rf_mcpr(rules, model_path=MODEL_PREDICT_MODEL_DIR / OPEN_SET_MODEL_FILENAME)
+        open_set_training = open_set_res.validation
+        trained_messages.append("2. 開集識別模型 <code>open_set_rf_mcpr.pkl</code> 訓練完成")
 
-    rule_stats = {
-        "output_rows": int(len(rules)),
-        "unique_ng_items": int(rules["NG項"].nunique()) if "NG項" in rules else 0,
-        "unique_repairs": int(rules["維修建議"].nunique()) if "維修建議" in rules else 0,
-        "groups_with_pass": int(rules["異常編號"].nunique()) if "異常編號" in rules else 0,
-    }
-    return render_page(rule_stats=rule_stats, training=training, mode="csv_train")
+    elif train_target == "admdp":
+        if admdp_trans_df is None:
+            return render_page(error="請上傳【2. admdp_transitions.csv 轉移鏈檔】以進行 ADMDP 訓練", mode="csv_train")
+        train_admdp_policy(admdp_trans_df, model_path=MODEL_PREDICT_MODEL_DIR / ADMDP_MODEL_FILENAME)
+        admdp_trained = True
+        trained_messages.append("3. 馬可夫動態決策 <code>admdp_policy.pkl</code> 訓練完成")
+
+    rule_stats = None
+    if rules is not None:
+        rule_stats = {
+            "output_rows": int(len(rules)),
+            "unique_ng_items": int(rules["NG項"].nunique()) if "NG項" in rules else 0,
+            "unique_repairs": int(rules["維修建議"].nunique()) if "維修建議" in rules else 0,
+            "groups_with_pass": int(rules["異常編號"].nunique()) if "異常編號" in rules else 0,
+        }
+
+    trained_msg = "✅ 訓練結果：<br>" + "<br>".join(trained_messages) if trained_messages else "已完成訓練"
+
+    return render_page(
+        rule_stats=rule_stats,
+        training=training,
+        open_set_training=open_set_training,
+        admdp_trained=admdp_trained,
+        trained_msg=trained_msg,
+        mode="csv_train",
+    )
 
 
 def render_page(
@@ -514,8 +677,12 @@ def render_page(
     result=None,
     output_file: str = "",
     stats_file: str = "",
+    admdp_ds_file: str = "",
     rule_stats: dict[str, int] | None = None,
     training=None,
+    open_set_training=None,
+    admdp_trained: bool = False,
+    trained_msg: str = "",
     mode: str = "",
 ):
     summary = {
@@ -541,8 +708,12 @@ def render_page(
         warnings=warnings,
         output_file=output_file,
         stats_file=stats_file,
+        admdp_ds_file=admdp_ds_file,
         rule_stats=rule_stats,
         training=training,
+        open_set_training=open_set_training,
+        admdp_trained=admdp_trained,
+        trained_msg=trained_msg,
         mode=mode,
         percent=percent,
         width_pct=width_pct,

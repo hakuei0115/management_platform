@@ -1,9 +1,13 @@
 import api from './axiosInstance';
 
 export const ModelPredictAPI = {
-    async predictModel(ng_items) {
+    async predictModel(ng_items, station_id = 'default_station', leak_values = {}) {
         try {
-            const res = await api.post('http://localhost:5001/predict', { ng_items });
+            const res = await api.post('http://localhost:5001/predict', {
+                ng_items,
+                station_id,
+                leak_values
+            });
 
             if (res.data.success) {
                 return res.data.data;
