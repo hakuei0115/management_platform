@@ -107,15 +107,15 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useEquipmentDataStore } from '@/stores/equipmentData'
-import { useModelPredictStore } from '@/stores/modelPredict'
+import { ModelPredictAPI } from '@/services/modelPredict'
 import { useModelMappingsStore } from '@/stores/modelMappings'
+import { formatTime, formatSuggestion, extractNgItems } from '@/utils/formatters'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 
 const equipmentDataStore = useEquipmentDataStore()
-const modelPredictStore = useModelPredictStore()
 const modelMappingsStore = useModelMappingsStore()
 
 const currentPage = ref(1)
@@ -123,11 +123,6 @@ const pageSize = ref(20)
 const total = ref(0)
 const loading = ref(false)
 const rows = ref([])
-
-function formatSuggestion(text) {
-  if (!text) return ''
-  return text.split(',').join('<br>')
-}
 
 const triggerByFilter = ref(false)
 const filters = ref({
@@ -137,22 +132,6 @@ const filters = ref({
   range: [],
   only_ng: false,
 })
-
-function formatTime(isoString) {
-  return dayjs(isoString).format('YYYY-MM-DD HH:mm:ss')
-}
-
-function extractNgItems(record) {
-  const checks = ['m01', 'm02', 'm03', 'm04', 'm05', 'm06', 'm07', 'm08', 'm09', 'm10', 'm11', 'm12']
-  const ng = []
-
-  for (const key of checks) {
-    if (record[key]?.includes('NG')) {
-      ng.push(key)
-    }
-  }
-  return ng
-}
 
 function getModelName(channel, equipmentId = 1) {
   const mappings = modelMappingsStore.modelMappings[equipmentId] || []
@@ -227,9 +206,11 @@ async function fetchOperations() {
           return
         }
 
-        await modelPredictStore.predictModel(row.ng_items)
-        row.suggestion = modelPredictStore.predictionResult.suggestions
-        row.part = modelPredictStore.predictionResult.parts
+        const res = await ModelPredictAPI.predictModel(row.ng_items)
+        if (res) {
+          row.suggestion = res.suggestions
+          row.part = res.parts
+        }
       })
     )
   } catch (err) {
@@ -284,28 +265,6 @@ onMounted(async () => {
   }
   fetchOperations()
 })
-
-// const testColumns = [
-//   { prop: 'M01', label: 'M01_低壓手動排水閥測試_測試結果' },
-//   { prop: 'M02', label: 'M02_高壓手動排水閥測試_測試結果' },
-//   { prop: 'M03', label: 'M03_低壓內漏調壓_測試結果' },
-//   { prop: 'M04', label: 'M04_低壓內漏測試_測試結果' },
-//   { prop: 'M05', label: 'M05_高壓內漏測試_測試結果' },
-//   { prop: 'M06', label: 'M06_低壓氣密調壓_測試結果' },
-//   { prop: 'M07', label: 'M07_低壓錶孔測試_測試結果' },
-//   { prop: 'M08', label: 'M08_低壓氣密測試_測試結果' },
-//   { prop: 'M09', label: 'M09_高壓氣密調壓_測試結果' },
-//   { prop: 'M10', label: 'M10_高壓錶孔測試_測試結果' },
-//   { prop: 'M11', label: 'M11_高壓氣密測試_測試結果' },
-//   { prop: 'M12', label: 'M12_測試完成調壓_測試結果' },
-// ]
-
-// const leakColumns = [
-//   { prop: 'M04_leak', label: 'M04_低壓內漏測試_洩漏量' },
-//   { prop: 'M05_leak', label: 'M05_高壓內漏測試_洩漏量' },
-//   { prop: 'M08_leak', label: 'M08_低壓氣密測試_洩漏量' },
-//   { prop: 'M11_leak', label: 'M11_高壓氣密測試_洩漏量' },
-// ]
 
 const testColumns = [
   { prop: 'M01', label: 'm01' },
@@ -406,12 +365,5 @@ function exportExcel() {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-:deep(.el-table thead th),
-:deep(.el-table thead.is-group th.el-table__cell)  {
-    background-color: #687480;
-    color: #e3e7ec;
-    font-weight: bold;
 }
 </style>

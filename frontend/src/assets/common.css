@@ -1,0 +1,12 @@
+/* 全域 Element Plus 表格樣式統一 */
+.el-table thead th,
+.el-table thead.is-group th.el-table__cell {
+    background-color: #687480 !important;
+    color: #e3e7ec !important;
+    font-weight: bold !important;
+}
+
+/* 全域卡片與頁面基礎字級 */
+.page-container {
+    font-size: 15px;
+}

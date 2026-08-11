@@ -45,7 +45,7 @@
             </el-form>
             <template #footer>
                 <el-button @click="dialogVisible = false">取消</el-button>
-                <el-button type="primary" @click="submitFom(row)">儲存</el-button>
+                <el-button type="primary" @click="submitForm">儲存</el-button>
             </template>
         </el-dialog>
     </el-card>
@@ -59,37 +59,48 @@ import { ElMessage } from "element-plus";
 const userStore = useUserStore();
 const dialogVisible = ref(false);
 const editingUser = ref(null);
-const form = ref({ email: "", role: "user" });
+const form = ref({ name: "", email: "", role: "operator", password: "" });
 
 onMounted(() => userStore.fetchUsers());
 
 function openForm(user = null) {
     editingUser.value = user;
-    form.value = user ? { ...user } : { email: "", role: "" };
-    console.log(form.value);
+    form.value = user 
+        ? { name: user.name || "", email: user.email || "", role: user.role_name || "operator", password: "" } 
+        : { name: "", email: "", role: "operator", password: "" };
     dialogVisible.value = true;
 }
 
-async function submitFom() {
-    if (editingUser.value) {
-        const roleId = userStore.getRoleIdByName(form.value.role);
-        form.value.role = roleId;
-        await userStore.updateUser(editingUser.value.id, form.value);
-        await userStore.fetchUsers();
-        ElMessage.success("使用者更新成功");
-    } else {
-        const roleId = userStore.getRoleIdByName(form.value.role);
-        form.value.role = roleId;
-        await userStore.insertUser(form.value);
-        await userStore.fetchUsers();
-        ElMessage.success("使用者新增成功");
+async function submitForm() {
+    try {
+        const roleId = userStore.getRoleIdByName(form.value.role) || form.value.role;
+        const payload = {
+            name: form.value.name,
+            email: form.value.email,
+            role: roleId,
+            password: form.value.password
+        };
+
+        if (editingUser.value) {
+            await userStore.updateUser(editingUser.value.id, payload);
+            ElMessage.success("使用者更新成功");
+        } else {
+            await userStore.insertUser(payload);
+            ElMessage.success("使用者新增成功");
+        }
+        dialogVisible.value = false;
+    } catch (err) {
+        ElMessage.error(typeof err === 'string' ? err : (err.message || '操作失敗'));
     }
-    dialogVisible.value = false;
 }
 
 async function deleteUser(id) {
-    await userStore.deleteUser(id);
-    ElMessage.success("使用者已刪除");
+    try {
+        await userStore.deleteUser(id);
+        ElMessage.success("使用者已刪除");
+    } catch (err) {
+        ElMessage.error(typeof err === 'string' ? err : (err.message || '刪除失敗'));
+    }
 }
 </script>
 
@@ -101,11 +112,5 @@ async function deleteUser(id) {
 .toolbar {
     margin-bottom: 12px;
     text-align: right;
-}
-
-:deep(.el-table thead th) {
-    background-color: #687480;
-    color: #e3e7ec;
-    font-weight: bold;
 }
 </style>

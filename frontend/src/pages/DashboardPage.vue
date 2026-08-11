@@ -65,11 +65,11 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useEquipmentDataStore } from '@/stores/equipmentData'
-import { useModelPredictStore } from '@/stores/modelPredict'
+import { ModelPredictAPI } from '@/services/modelPredict'
+import { formatTime, formatSuggestion, extractNgItems } from '@/utils/formatters'
 import dayjs from 'dayjs'
 
 const equipmentDataStore = useEquipmentDataStore()
-const modelPredictStore = useModelPredictStore()
 
 const loading = ref(false)
 const rows = ref([])   // ★ 只存 50 筆資料（FIFO）
@@ -82,20 +82,6 @@ const filters = ref({
     product_spec: "",
     range: [],
 })
-
-function formatTime(t) {
-    return dayjs(t).format("YYYY-MM-DD HH:mm:ss")
-}
-
-function formatSuggestion(s) {
-    if (!s) return ""
-    return s.split(",").join("<br>")
-}
-
-function extractNgItems(r) {
-    const checks = ["m01","m02","m03","m04","m05","m06","m07","m08","m09","m10","m11","m12"]
-    return checks.filter(k => r[k]?.includes("NG"))
-}
 
 function mapRecord(r) {
     return {
@@ -130,9 +116,11 @@ async function fetchData(appendMode = false) {
                 row.suggestion = "產品狀態良好，無需維修"
                 row.part = "無"
             } else {
-                await modelPredictStore.predictModel(row.ng_items)
-                row.suggestion = modelPredictStore.predictionResult.suggestions
-                row.part = modelPredictStore.predictionResult.parts
+                const res = await ModelPredictAPI.predictModel(row.ng_items)
+                if (res) {
+                    row.suggestion = res.suggestions
+                    row.part = res.parts
+                }
             }
         })
     )
@@ -210,11 +198,5 @@ onUnmounted(() => clearInterval(timer))
     flex-wrap: wrap;
     gap: 8px 16px;
     align-items: flex-end;
-}
-
-:deep(.el-table thead th) {
-    background-color: #687480;
-    color: #e3e7ec;
-    font-weight: bold;
 }
 </style>

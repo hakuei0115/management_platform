@@ -3,6 +3,8 @@ import pandas as pd
 import logging
 import traceback
 import os
+import json
+import redis
 from datetime import datetime
 from pathlib import Path
 from threading import Lock
@@ -23,6 +25,21 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
+
+# =========================
+# Redis 快取連線初始化
+# =========================
+REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
+
+redis_client = None
+try:
+    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, socket_timeout=2)
+    redis_client.ping()
+    logging.info(f"Redis 快取伺服器連線成功：{REDIS_HOST}:{REDIS_PORT}")
+except Exception as e:
+    logging.warning(f"Redis 連線失敗，將降級為無快取模式：{str(e)}")
+    redis_client = None
 
 # =========================
 # 模型載入
@@ -178,6 +195,18 @@ def predict():
             }
             return jsonify({"success": True, "data": resp})
 
+        # === 0.1 Redis 快取檢查 (Cache Hit) ===
+        cache_key = f"predict:{':'.join(sorted([str(ng).lower() for ng in ng_items]))}:{top_n}"
+        if redis_client:
+            try:
+                cached_bytes = redis_client.get(cache_key)
+                if cached_bytes:
+                    cached_data = json.loads(cached_bytes.decode('utf-8'))
+                    logging.info(f"⚡ Redis 快取命中 (Cache Hit): {cache_key}")
+                    return jsonify({"success": True, "data": cached_data, "cached": True})
+            except Exception as cache_err:
+                logging.warning(f"Redis 讀取快取失敗 (降級處理): {str(cache_err)}")
+
         # === 1. NG 簡碼 → 全名 ===
         translated = []
         for ng in ng_items:
@@ -214,6 +243,14 @@ def predict():
             "suggestions": merged_suggestions_str,
             "parts": likely_parts
         }
+
+        # === 6.1 寫入 Redis 快取 (保存 24 小時 / 86400 秒) ===
+        if redis_client:
+            try:
+                redis_client.setex(cache_key, 86400, json.dumps(response_data))
+                logging.info(f"💾 寫入 Redis 快取成功: {cache_key}")
+            except Exception as cache_err:
+                logging.warning(f"Redis 寫入快取失敗 (降級處理): {str(cache_err)}")
 
         # Log
         log_record = {

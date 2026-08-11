@@ -1,9 +1,11 @@
 import express from "express";
 import pool from "../db.js";
+import { verifyToken } from "../middleware/authMiddleware.js";
+import { requireRole } from "../middleware/roleMiddleware.js";
 
 const router = express.Router();
 
-router.get("/equipments/:equipmentId/stations", async (req, res) => {
+router.get("/equipments/:equipmentId/stations", verifyToken, async (req, res) => {
     try {
         const equipmentId = req.params.equipmentId;
         const [stations] = await pool.query("SELECT * FROM stations WHERE equipment_id = ?", [equipmentId]);
@@ -15,7 +17,7 @@ router.get("/equipments/:equipmentId/stations", async (req, res) => {
     }
 });
 
-router.post("/equipments/:equipmentId/stations", async (req, res) => {
+router.post("/equipments/:equipmentId/stations", verifyToken, requireRole("admin"), async (req, res) => {
     try {
         const equipmentId = req.params.equipmentId;
         const { id, station_no } = req.body;
@@ -35,7 +37,7 @@ router.post("/equipments/:equipmentId/stations", async (req, res) => {
     }
 });
 
-router.put("/equipments/:equipmentId/stations/:stationId", async (req, res) => {
+router.put("/equipments/:equipmentId/stations/:stationId", verifyToken, requireRole("admin"), async (req, res) => {
     try {
         const equipmentId = req.params.equipmentId;
         const stationId = req.params.stationId;
@@ -57,7 +59,7 @@ router.put("/equipments/:equipmentId/stations/:stationId", async (req, res) => {
     }
 });
 
-router.delete("/equipments/:equipmentId/stations/:stationId", async (req, res) => {
+router.delete("/equipments/:equipmentId/stations/:stationId", verifyToken, requireRole("admin"), async (req, res) => {
     try {
         const equipmentId = req.params.equipmentId;
         const stationId = req.params.stationId;

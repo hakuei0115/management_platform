@@ -1,10 +1,11 @@
 import express from "express";
 import pool from "../db.js";
 import { translateRecord } from "../utils/plcDecoder.js";
+import { verifyToken } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.get("/data", async (req, res) => {
+router.get("/data", verifyToken, async (req, res) => {
     try {
         let {
             page = 1,
@@ -71,13 +72,23 @@ router.get("/data", async (req, res) => {
 
         // 型號 / D003
         if (product_spec && String(product_spec).trim() !== "") {
-            const ch = Number(product_spec);
+            const trimmedSpec = String(product_spec).trim();
+            const ch = Number(trimmedSpec);
             if (!Number.isNaN(ch)) {
                 whereClauses.push("D003 = ?");
                 whereParams.push(ch);
             } else {
-                whereClauses.push("D003 = ?");
-                whereParams.push(product_spec);
+                const [mapRows] = await pool.query(
+                    "SELECT DISTINCT channel FROM model_mappings WHERE model_name LIKE ?",
+                    [`%${trimmedSpec}%`]
+                );
+                const channels = mapRows.map(row => row.channel);
+                if (channels.length > 0) {
+                    whereClauses.push(`D003 IN (${channels.map(() => '?').join(',')})`);
+                    whereParams.push(...channels);
+                } else {
+                    whereClauses.push("1 = 0");
+                }
             }
         }
 

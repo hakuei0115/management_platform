@@ -1,21 +1,11 @@
 import express from "express";
 import pool from "../db.js";
+import { verifyToken } from "../middleware/authMiddleware.js";
+import { requireRole } from "../middleware/roleMiddleware.js";
 
 const router = express.Router();
 
-// router.get("/equipments", async (req, res) => {
-//     try {
-//         const [equipment] = await pool.query("SELECT * FROM equipments");
-
-//         res.json({ success: true, data: equipment, message: "取得設備列表成功" });
-//     } catch (error) {
-//         console.error("取得設備列表失敗:", error);
-//         res.status(500).json({ message: "伺服器錯誤" });
-//     }
-// });
-
-// template for CRUD operations on equipments
-router.get("/equipments", async (_req, res) => {
+router.get("/equipments", verifyToken, async (_req, res) => {
     try {
         const statusMap = {
             5: "running",
@@ -43,7 +33,7 @@ router.get("/equipments", async (_req, res) => {
     }
 });
 
-router.post("/equipments", async (req, res) => {
+router.post("/equipments", verifyToken, requireRole("admin"), async (req, res) => {
     try {
         const { equipment_code, name, install_location } = req.body;
 
@@ -70,7 +60,7 @@ router.post("/equipments", async (req, res) => {
     }
 });
 
-router.put("/equipments/:id", async (req, res) => {
+router.put("/equipments/:id", verifyToken, requireRole("admin"), async (req, res) => {
     try {
         const equipmentId = req.params.id;
         const { equipment_code, name, install_location, status } = req.body;
@@ -92,7 +82,7 @@ router.put("/equipments/:id", async (req, res) => {
     }
 });
 
-router.delete("/equipments/:id", async (req, res) => {
+router.delete("/equipments/:id", verifyToken, requireRole("admin"), async (req, res) => {
     try {
         const equipmentId = req.params.id;
 

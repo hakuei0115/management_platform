@@ -45,8 +45,7 @@ export const useUserStore = defineStore('user', () => {
             const res = await UserAPI.insertUser(payload)
 
             if (res.success) {
-                // 有成功，手動更新前端 userList
-                userList.value.push(payload)
+                await fetchUsers()
             } else {
                 throw new Error(res.message || '新增使用者失敗')
             }
@@ -70,10 +69,7 @@ export const useUserStore = defineStore('user', () => {
             const res = await UserAPI.updateUser(userId, payload)
 
             if (res.success) {
-                const index = userList.value.findIndex(u => u.id === userId)
-                if (index !== -1) {
-                    userList.value[index] = { ...userList.value[index], ...payload }
-                }
+                await fetchUsers()
             } else {
                 throw new Error(res.message || '更新使用者失敗')
             }

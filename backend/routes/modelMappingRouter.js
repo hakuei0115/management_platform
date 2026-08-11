@@ -1,9 +1,11 @@
 import express from "express";
 import pool from "../db.js";
+import { verifyToken } from "../middleware/authMiddleware.js";
+import { requireRole } from "../middleware/roleMiddleware.js";
 
 const router = express.Router();
 
-router.get("/equipments/:equipmentId/model_mappings", async (req, res) => {
+router.get("/equipments/:equipmentId/model_mappings", verifyToken, async (req, res) => {
     try {
         const { equipmentId } = req.params;
         const [result] = await pool.query(
@@ -18,7 +20,7 @@ router.get("/equipments/:equipmentId/model_mappings", async (req, res) => {
     }
 });
 
-router.post("/equipments/:equipmentId/model_mappings", async (req, res) => {
+router.post("/equipments/:equipmentId/model_mappings", verifyToken, requireRole("admin"), async (req, res) => {
     try {
         const equipmentId = req.params.equipmentId;
 
@@ -37,7 +39,7 @@ router.post("/equipments/:equipmentId/model_mappings", async (req, res) => {
     }
 });
 
-router.put("/equipments/:equipmentId/model_mappings/:mappingId", async (req, res) => {
+router.put("/equipments/:equipmentId/model_mappings/:mappingId", verifyToken, requireRole("admin"), async (req, res) => {
     try {
         const equipmentId = req.params.equipmentId;
         const mappingId = req.params.mappingId;
@@ -61,7 +63,7 @@ router.put("/equipments/:equipmentId/model_mappings/:mappingId", async (req, res
     }
 });
 
-router.delete("/equipments/:equipmentId/model_mappings/:mappingId", async (req, res) => {
+router.delete("/equipments/:equipmentId/model_mappings/:mappingId", verifyToken, requireRole("admin"), async (req, res) => {
     try {
         const equipmentId = req.params.equipmentId;
         const mappingId = req.params.mappingId;

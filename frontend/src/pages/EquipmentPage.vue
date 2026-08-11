@@ -449,10 +449,4 @@ async function removeDevice(id) {
 .el-table td {
     font-size: 15px;
 }
-
-:deep(.el-table thead th) {
-    background-color: #687480;
-    color: #e3e7ec;
-    font-weight: bold;
-}
 </style>
