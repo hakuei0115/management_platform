@@ -167,30 +167,50 @@ def make_eval_split(data: pd.DataFrame, *, test_size: float, random_state: int) 
     if len(data) < 5:
         return None
 
-    if GROUP_COL in data.columns and data[GROUP_COL].nunique() >= 5:
-        splitter = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
-        train_idx, test_idx = next(splitter.split(data, groups=data[GROUP_COL].astype(str)))
-        return {
-            "train_idx": train_idx,
-            "test_idx": test_idx,
-            "strategy": "group_holdout",
-        }
-
-    stratify = None
+    # 稀有類別保護 (Rare Class Protection):
     class_counts = data[TARGET_COL].value_counts()
-    if class_counts.min() >= 2 and len(class_counts) <= int(len(data) * test_size):
-        stratify = data[TARGET_COL]
+    rare_classes = set(class_counts[class_counts <= 2].index)
 
-    train_idx, test_idx = train_test_split(
-        data.index.to_numpy(),
-        test_size=test_size,
-        random_state=random_state,
-        stratify=stratify,
-    )
+    protected_train_indices = []
+    evaluable_indices = []
+
+    for cls in data[TARGET_COL].unique():
+        cls_indices = data[data[TARGET_COL] == cls].index.tolist()
+        if cls in rare_classes:
+            protected_train_indices.append(cls_indices[0])
+            evaluable_indices.extend(cls_indices[1:])
+        else:
+            evaluable_indices.extend(cls_indices)
+
+    if not evaluable_indices:
+        evaluable_indices = data.index.tolist()
+        protected_train_indices = []
+
+    sub_data = data.loc[evaluable_indices]
+
+    if GROUP_COL in sub_data.columns and sub_data[GROUP_COL].nunique() >= 5:
+        splitter = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
+        sub_train_pos, sub_test_pos = next(splitter.split(sub_data, groups=sub_data[GROUP_COL].astype(str)))
+        train_idx = np.unique(np.concatenate([protected_train_indices, sub_data.index[sub_train_pos].to_numpy()]))
+        test_idx = sub_data.index[sub_test_pos].to_numpy()
+        strategy = "group_holdout_rare_protected"
+    else:
+        sub_class_counts = sub_data[TARGET_COL].value_counts()
+        stratify = sub_data[TARGET_COL] if len(sub_class_counts) > 0 and sub_class_counts.min() >= 2 else None
+        sub_train_idx, sub_test_idx = train_test_split(
+            sub_data.index.to_numpy(),
+            test_size=test_size,
+            random_state=random_state,
+            stratify=stratify,
+        )
+        train_idx = np.unique(np.concatenate([protected_train_indices, sub_train_idx]))
+        test_idx = sub_test_idx
+        strategy = "row_holdout_rare_protected"
+
     return {
         "train_idx": train_idx,
         "test_idx": test_idx,
-        "strategy": "row_holdout",
+        "strategy": strategy,
     }
 
 

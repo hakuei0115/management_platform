@@ -14,7 +14,7 @@ from rf_mcpr_training import train_rf_mcpr
 from open_set_rf_training import train_open_set_rf_mcpr
 from admdp_training import train_admdp_from_excel, train_admdp_policy
 from admdp_dataset import build_admdp_transitions
-from historical_evaluator import evaluate_historical_models
+from historical_evaluator import CACHE_FILE, evaluate_historical_models
 
 
 app = Flask(__name__)
@@ -460,18 +460,18 @@ PAGE_TEMPLATE = """
         {% endif %}
       </section>
 
-      <!-- 📊 歷代 AI 模型表現評估與版本比較 -->
+      <!-- 歷代 AI 模型表現評估與版本比較 -->
       <section style="grid-column: 1 / -1; margin-top: 10px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
           <div>
-            <h2 style="margin: 0; font-size: 18px;">📊 歷代 AI 模型表現評估與版本比較</h2>
+            <h2 style="margin: 0; font-size: 18px;">歷代 AI 模型表現評估與版本比較</h2>
             <p style="margin: 4px 0 0; color: var(--muted); font-size: 13px;">
-              自動掃描 row_data 歷史資料（10月 $\rightarrow$ 11月 $\rightarrow$ ... $\rightarrow$ 7月全量），評估模型隨時間演進之準確率與涵蓋率，協助挑選最佳現場運作模型。
+              自動掃描 row_data 歷史資料（10月 -> 11月 -> ... -> 7月全量），評估模型隨時間演進之準確率與涵蓋率，協助挑選最佳現場運作模型。
             </p>
           </div>
           <form action="{{ url_for('evaluate_history') }}" method="post" style="margin: 0;">
             <button type="submit" name="action" value="history" class="secondary" style="padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;">
-              ⚡ 重新評估歷代模型
+              重新評估歷代模型
             </button>
           </form>
         </div>
@@ -485,17 +485,18 @@ PAGE_TEMPLATE = """
                   <th style="padding: 10px 12px;">檔案數</th>
                   <th style="padding: 10px 12px;">對照樣本數</th>
                   <th style="padding: 10px 12px;">維修類別</th>
-                  <th style="padding: 10px 12px;">🚀 Top-3 現場命中率</th>
+                  <th style="padding: 10px 12px;">Top-3 現場命中率</th>
                   <th style="padding: 10px 12px;">Top-1 單選準確</th>
                   <th style="padding: 10px 12px;">袋外 OOB 分數</th>
                   <th style="padding: 10px 12px;">Open-Set 信心準確</th>
                   <th style="padding: 10px 12px;">ADMDP 轉移筆數</th>
                   <th style="padding: 10px 12px; text-align: center;">現場推薦標籤</th>
+                  <th style="padding: 10px 12px; text-align: center;">現場部署操作</th>
                 </tr>
               </thead>
               <tbody>
                 {% for item in history_results %}
-                  <tr style="border-bottom: 1px solid var(--line); {% if item.is_latest %}background: #f0f7ff;{% elif item.is_best_f1 %}background: #f0fff4;{% endif %}">
+                  <tr style="border-bottom: 1px solid var(--line); {% if item.is_active or ("現場運行" in item.badge) %}background: #f0f7ff;{% elif item.is_best_f1 %}background: #f0fff4;{% endif %}">
                     <td style="padding: 10px 12px; font-weight: 600;">
                       {{ item.period_label }}
                     </td>
@@ -517,13 +518,26 @@ PAGE_TEMPLATE = """
                     <td style="padding: 10px 12px; text-align: center;">
                       {% if item.badge %}
                         <span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;
-                          {% if item.is_latest %}background: #0f4c81; color: #ffffff;
-                          {% elif item.is_best_f1 %}background: #146c43; color: #ffffff;
+                          {% if "現場運行" in item.badge %}background: #0f4c81; color: #ffffff;
+                          {% elif "最高準率" in item.badge %}background: #146c43; color: #ffffff;
                           {% else %}background: #e2e8f0; color: #475569;{% endif %}">
                           {{ item.badge }}
                         </span>
                       {% else %}
                         <span style="color: var(--muted);">-</span>
+                      {% endif %}
+                    </td>
+                    <td style="padding: 10px 12px; text-align: center;">
+                      {% if item.is_active or ("現場運行" in item.badge) %}
+                        <span style="color: #0f4c81; font-weight: 700; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
+                          現場運行中
+                        </span>
+                      {% else %}
+                        <form action="{{ url_for('deploy_checkpoint', stage_id=item.stage) }}" method="post" style="margin: 0;">
+                          <button type="submit" style="padding: 5px 12px; font-size: 12px; background: #0f4c81; color: #ffffff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; transition: all 0.2s;">
+                            一鍵切換此版本
+                          </button>
+                        </form>
                       {% endif %}
                     </td>
                   </tr>
@@ -764,6 +778,49 @@ def evaluate_history():
         )
     except Exception as exc:
         return render_page(error=f"評估歷代模型失敗：{exc}", mode="history_eval")
+
+
+@app.post("/deploy-checkpoint/<int:stage_id>")
+def deploy_checkpoint(stage_id: int):
+    stage_dir = OUTPUT_DIR / "checkpoints" / f"stage_{stage_id}"
+    if not stage_dir.exists():
+        return render_page(error=f"找不到階段 {stage_id} 的模型檔庫，請先點擊「重新評估歷代模型」建立歸檔。", mode="history_eval")
+
+    import json, shutil
+    try:
+        # 1. 複製 .pkl 模型檔案至 MODEL_PREDICT_MODEL_DIR
+        for pkl_file in stage_dir.glob("*.pkl"):
+            shutil.copy2(pkl_file, MODEL_PREDICT_MODEL_DIR / pkl_file.name)
+
+        # 2. 複製 .csv 對照表格檔案至 MODEL_PREDICT_DATA_DIR 與 OUTPUT_DIR
+        for csv_file in stage_dir.glob("*.csv"):
+            shutil.copy2(csv_file, MODEL_PREDICT_DATA_DIR / csv_file.name)
+            shutil.copy2(csv_file, OUTPUT_DIR / csv_file.name)
+
+        # 3. 更新快取階段標記
+        if CACHE_FILE.exists():
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                cache_data = json.load(f)
+            for item in cache_data:
+                item_badge = item.get("badge", "")
+                if item.get("stage") == stage_id:
+                    item["is_active"] = True
+                    if "現場運行" not in item_badge:
+                        item["badge"] = (item_badge + " 現場運行").strip()
+                else:
+                    item["is_active"] = False
+                    if "現場運行" in item_badge:
+                        item["badge"] = item_badge.replace("現場運行", "").strip()
+
+            with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump(cache_data, f, ensure_ascii=False, indent=2)
+
+        return render_page(
+            trained_msg=f"🚀 成功切換並部署階段 {stage_id} 模型至現場運作服務！",
+            mode="history_eval",
+        )
+    except Exception as exc:
+        return render_page(error=f"部署模型失敗：{exc}", mode="history_eval")
 
 
 def render_page(

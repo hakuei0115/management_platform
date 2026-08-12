@@ -9,6 +9,7 @@ from typing import Any
 import pandas as pd
 
 from admdp_dataset import build_admdp_transitions
+from admdp_training import train_admdp_policy
 from excel_merge_pipeline import merge_excel_sources
 from generate_ng_rules import generate_ng_rules
 from open_set_rf_training import train_open_set_rf_mcpr
@@ -18,6 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 ROW_DATA_DIR = PROJECT_ROOT / "row_data"
 OUTPUT_DIR = PROJECT_ROOT / "outputs"
 CACHE_FILE = OUTPUT_DIR / "historical_evaluation_cache.json"
+CHECKPOINTS_DIR = OUTPUT_DIR / "checkpoints"
 
 
 @dataclass
@@ -135,9 +137,18 @@ def evaluate_historical_models(force_recompute: bool = False) -> list[dict[str, 
         open_set_acc, open_set_cov = 0.0, 0.0
         admdp_trans_cnt, admdp_states_cnt = 0, 0
 
-        # 訓練 RF-MCPR 評估
+        # 建立此階段模型檔庫歸檔目錄
+        stage_dir = CHECKPOINTS_DIR / f"stage_{idx}"
+        stage_dir.mkdir(parents=True, exist_ok=True)
+
         try:
-            rf_res = train_rf_mcpr(rules, model_path=OUTPUT_DIR / f"temp_rf_{idx}.pkl", n_estimators=100)
+            rules.to_csv(stage_dir / "NG項_最終維修建議對照.csv", index=False, encoding="utf-8-sig")
+        except Exception as err:
+            print(f"⚠️ 階段 {idx} 保存對照表失敗:", err)
+
+        # 訓練 RF-MCPR 評估並歸檔 checkpoint
+        try:
+            rf_res = train_rf_mcpr(rules, model_path=stage_dir / "rf_mcpr.pkl", n_estimators=100)
             rf_acc = float(rf_res.metrics.get("accuracy", 0.0) or 0.0)
             rf_top3_acc = float(rf_res.metrics.get("top3_accuracy", 0.0) or 0.0)
             rf_oob = float(rf_res.metrics.get("oob_score", 0.0) or 0.0)
@@ -147,22 +158,24 @@ def evaluate_historical_models(force_recompute: bool = False) -> list[dict[str, 
         except Exception as err:
             print(f"⚠️ 階段 {idx} RF-MCPR 評估失敗:", err)
 
-        # 訓練 Open-Set 評估
+        # 訓練 Open-Set 評估並歸檔 checkpoint
         try:
-            os_res = train_open_set_rf_mcpr(rules, model_path=OUTPUT_DIR / f"temp_os_{idx}.pkl", n_estimators=100)
+            os_res = train_open_set_rf_mcpr(rules, model_path=stage_dir / "open_set_rf.pkl", n_estimators=100)
             open_set_acc = float(os_res.validation.get("confident_accuracy", 0.0) or os_res.validation.get("raw_top1_accuracy", 0.0) or 0.0)
             open_set_cov = float(os_res.validation.get("non_unknown_coverage", 0.0) or 0.0)
         except Exception as err:
             print(f"⚠️ 階段 {idx} Open-Set 評估失敗:", err)
 
-        # ADMDP 轉移鏈評估
+        # ADMDP 轉移鏈評估與歸檔 checkpoint
         try:
             admdp_res = build_admdp_transitions(raw_df)
             admdp_trans_cnt = int(len(admdp_res.transitions))
             if "curr_state" in admdp_res.transitions:
                 admdp_states_cnt = int(admdp_res.transitions["curr_state"].nunique())
+            admdp_res.transitions.to_csv(stage_dir / "admdp_state_transitions.csv", index=False, encoding="utf-8-sig")
+            train_admdp_policy(admdp_res.transitions, model_path=stage_dir / "admdp_policy.pkl")
         except Exception as err:
-            print(f"⚠️ 階段 {idx} ADMDP 轉移鏈評估失敗:", err)
+            print(f"⚠️ 階段 {idx} ADMDP 轉移鏈評估與歸檔失敗:", err)
 
         eval_score = max(rf_f1, rf_acc, rf_top3_acc, open_set_acc)
         if eval_score > best_f1_val:
@@ -196,7 +209,7 @@ def evaluate_historical_models(force_recompute: bool = False) -> list[dict[str, 
     if dict_results:
         # 1. 標註最新版本
         dict_results[-1]["is_latest"] = True
-        dict_results[-1]["badge"] = "🚀 最新全量 (現場運行)"
+        dict_results[-1]["badge"] = "現場運行"
 
         # 2. 找出綜合表現最佳版本 (極值 max score)
         best_idx = max(
@@ -205,13 +218,13 @@ def evaluate_historical_models(force_recompute: bool = False) -> list[dict[str, 
         )
         dict_results[best_idx]["is_best_f1"] = True
         if not dict_results[best_idx]["badge"]:
-            dict_results[best_idx]["badge"] = "⭐ 最高準率 (建議選用)"
-        elif "⭐" not in dict_results[best_idx]["badge"]:
-            dict_results[best_idx]["badge"] += " ⭐ 最高準率"
+            dict_results[best_idx]["badge"] = "最高準率"
+        elif "最高準率" not in dict_results[best_idx]["badge"]:
+            dict_results[best_idx]["badge"] += " 最高準率"
 
         # 3. 初始對照版本
         if not dict_results[0]["badge"]:
-            dict_results[0]["badge"] = "🌱 初始對照"
+            dict_results[0]["badge"] = "初始對照"
 
     # 存檔至 Cache
     try:

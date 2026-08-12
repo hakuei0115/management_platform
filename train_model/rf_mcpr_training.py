@@ -8,10 +8,45 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
+from scipy.sparse import issparse, vstack
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support, precision_score, recall_score
 from sklearn.model_selection import GroupShuffleSplit, train_test_split
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
+
+
+def oversample_minority_classes(
+    x_data: Any,
+    y_data: np.ndarray,
+    *,
+    min_samples: int = 5,
+    random_state: int = 42,
+) -> tuple[Any, np.ndarray]:
+    """針對樣本數少於 min_samples 的類別進行離散過採樣 (Random Oversampling)"""
+    if len(y_data) == 0:
+        return x_data, y_data
+
+    np.random.seed(random_state)
+    unique_classes, counts = np.unique(y_data, return_counts=True)
+
+    x_parts = [x_data]
+    y_parts = [y_data]
+
+    for cls, count in zip(unique_classes, counts):
+        if count < min_samples:
+            needed = min_samples - count
+            cls_indices = np.where(y_data == cls)[0]
+            sampled_indices = np.random.choice(cls_indices, size=needed, replace=True)
+            x_parts.append(x_data[sampled_indices])
+            y_parts.append(y_data[sampled_indices])
+
+    if issparse(x_data):
+        x_res = vstack(x_parts)
+    else:
+        x_res = np.vstack(x_parts)
+
+    y_res = np.concatenate(y_parts)
+    return x_res, y_res
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -111,30 +146,51 @@ def make_eval_split(data: pd.DataFrame, *, test_size: float, random_state: int) 
     if len(data) < 5:
         return None
 
-    if GROUP_COL in data.columns and data[GROUP_COL].nunique() >= 5:
-        splitter = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
-        train_idx, test_idx = next(splitter.split(data, groups=data[GROUP_COL].astype(str)))
-        return {
-            "train_idx": train_idx,
-            "test_idx": test_idx,
-            "strategy": "group_holdout",
-        }
-
-    stratify = None
+    # 稀有類別保護 (Rare Class Protection):
+    # 若某個類別總樣本數 <= 2 筆，強制分配至少 1 筆至訓練集 (train_idx)，避免測試集中包含訓練集未學過的類別
     class_counts = data[TARGET_COL].value_counts()
-    if class_counts.min() >= 2 and len(class_counts) <= int(len(data) * test_size):
-        stratify = data[TARGET_COL]
+    rare_classes = set(class_counts[class_counts <= 2].index)
 
-    train_idx, test_idx = train_test_split(
-        data.index.to_numpy(),
-        test_size=test_size,
-        random_state=random_state,
-        stratify=stratify,
-    )
+    protected_train_indices = []
+    evaluable_indices = []
+
+    for cls in data[TARGET_COL].unique():
+        cls_indices = data[data[TARGET_COL] == cls].index.tolist()
+        if cls in rare_classes:
+            protected_train_indices.append(cls_indices[0])
+            evaluable_indices.extend(cls_indices[1:])
+        else:
+            evaluable_indices.extend(cls_indices)
+
+    if not evaluable_indices:
+        evaluable_indices = data.index.tolist()
+        protected_train_indices = []
+
+    sub_data = data.loc[evaluable_indices]
+
+    if GROUP_COL in sub_data.columns and sub_data[GROUP_COL].nunique() >= 5:
+        splitter = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
+        sub_train_pos, sub_test_pos = next(splitter.split(sub_data, groups=sub_data[GROUP_COL].astype(str)))
+        train_idx = np.unique(np.concatenate([protected_train_indices, sub_data.index[sub_train_pos].to_numpy()]))
+        test_idx = sub_data.index[sub_test_pos].to_numpy()
+        strategy = "group_holdout_rare_protected"
+    else:
+        sub_class_counts = sub_data[TARGET_COL].value_counts()
+        stratify = sub_data[TARGET_COL] if len(sub_class_counts) > 0 and sub_class_counts.min() >= 2 else None
+        sub_train_idx, sub_test_idx = train_test_split(
+            sub_data.index.to_numpy(),
+            test_size=test_size,
+            random_state=random_state,
+            stratify=stratify,
+        )
+        train_idx = np.unique(np.concatenate([protected_train_indices, sub_train_idx]))
+        test_idx = sub_test_idx
+        strategy = "row_holdout_rare_protected"
+
     return {
         "train_idx": train_idx,
         "test_idx": test_idx,
-        "strategy": "row_holdout",
+        "strategy": strategy,
     }
 
 
@@ -200,7 +256,7 @@ def evaluate_model(
             }
         )
 
-    # 計算 Top-3 命中率 (現場實用度指標)
+    # 計算 Top-3 命中率 (使用平衡訓練模型)
     top3_hit = 0
     if hasattr(model, "predict_proba") and len(y_test) > 0:
         probs = model.predict_proba(x_test)
