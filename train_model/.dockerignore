@@ -1,5 +1,4 @@
 __pycache__/
 *.pyc
 outputs/
-row_data/
 .DS_Store

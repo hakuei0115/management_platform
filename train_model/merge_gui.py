@@ -14,6 +14,7 @@ from rf_mcpr_training import train_rf_mcpr
 from open_set_rf_training import train_open_set_rf_mcpr
 from admdp_training import train_admdp_from_excel, train_admdp_policy
 from admdp_dataset import build_admdp_transitions
+from historical_evaluator import evaluate_historical_models
 
 
 app = Flask(__name__)
@@ -416,9 +417,9 @@ PAGE_TEMPLATE = """
         {% if training %}
           <h2 style="margin-top: 20px;">RF-MCPR 主模型評估 (靜態診斷)</h2>
           <div class="metrics">
-            <div class="metric"><strong>{{ percent(training.metrics.accuracy) }}</strong><span>Accuracy</span></div>
-            <div class="metric"><strong>{{ percent(training.metrics.precision_weighted) }}</strong><span>Weighted Precision</span></div>
-            <div class="metric"><strong>{{ percent(training.metrics.recall_weighted) }}</strong><span>Weighted Recall</span></div>
+            <div class="metric"><strong style="color: var(--ok);">{{ percent(training.metrics.top3_accuracy) if training.metrics.top3_accuracy else percent(training.metrics.accuracy) }}</strong><span>🚀 Top-3 現場命中率</span></div>
+            <div class="metric"><strong>{{ percent(training.metrics.accuracy) }}</strong><span>Top-1 單選準確</span></div>
+            <div class="metric"><strong>{{ percent(training.metrics.oob_score) if training.metrics.oob_score else 'N/A' }}</strong><span>袋外 OOB 分數</span></div>
             <div class="metric"><strong>{{ percent(training.metrics.f1_weighted) }}</strong><span>Weighted F1</span></div>
           </div>
           <p class="subtle">
@@ -458,6 +459,84 @@ PAGE_TEMPLATE = """
           </div>
         {% endif %}
       </section>
+
+      <!-- 📊 歷代 AI 模型表現評估與版本比較 -->
+      <section style="grid-column: 1 / -1; margin-top: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h2 style="margin: 0; font-size: 18px;">📊 歷代 AI 模型表現評估與版本比較</h2>
+            <p style="margin: 4px 0 0; color: var(--muted); font-size: 13px;">
+              自動掃描 row_data 歷史資料（10月 $\rightarrow$ 11月 $\rightarrow$ ... $\rightarrow$ 7月全量），評估模型隨時間演進之準確率與涵蓋率，協助挑選最佳現場運作模型。
+            </p>
+          </div>
+          <form action="{{ url_for('evaluate_history') }}" method="post" style="margin: 0;">
+            <button type="submit" name="action" value="history" class="secondary" style="padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;">
+              ⚡ 重新評估歷代模型
+            </button>
+          </form>
+        </div>
+
+        {% if history_results %}
+          <div style="overflow-x: auto; border: 1px solid var(--line); border-radius: 6px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+              <thead>
+                <tr style="background: var(--bg); border-bottom: 2px solid var(--line);">
+                  <th style="padding: 10px 12px;">演進階段 / 時間視窗</th>
+                  <th style="padding: 10px 12px;">檔案數</th>
+                  <th style="padding: 10px 12px;">對照樣本數</th>
+                  <th style="padding: 10px 12px;">維修類別</th>
+                  <th style="padding: 10px 12px;">🚀 Top-3 現場命中率</th>
+                  <th style="padding: 10px 12px;">Top-1 單選準確</th>
+                  <th style="padding: 10px 12px;">袋外 OOB 分數</th>
+                  <th style="padding: 10px 12px;">Open-Set 信心準確</th>
+                  <th style="padding: 10px 12px;">ADMDP 轉移筆數</th>
+                  <th style="padding: 10px 12px; text-align: center;">現場推薦標籤</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in history_results %}
+                  <tr style="border-bottom: 1px solid var(--line); {% if item.is_latest %}background: #f0f7ff;{% elif item.is_best_f1 %}background: #f0fff4;{% endif %}">
+                    <td style="padding: 10px 12px; font-weight: 600;">
+                      {{ item.period_label }}
+                    </td>
+                    <td style="padding: 10px 12px;">{{ item.file_count }} 個</td>
+                    <td style="padding: 10px 12px;"><strong>{{ item.rule_count }}</strong> 筆</td>
+                    <td style="padding: 10px 12px;">{{ item.unique_repairs }} 種</td>
+                    <td style="padding: 10px 12px;">
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-weight: 700; color: var(--ok);">{{ percent(item.rf_top3_accuracy) if item.rf_top3_accuracy else percent(item.rf_accuracy) }}</span>
+                        <div style="flex: 1; min-width: 50px; max-width: 70px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden;">
+                          <div style="width: {{ width_pct(item.rf_top3_accuracy or item.rf_accuracy) }}%; height: 100%; background: var(--ok);"></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style="padding: 10px 12px;">{{ percent(item.rf_accuracy) }}</td>
+                    <td style="padding: 10px 12px;">{{ percent(item.rf_oob_score) if item.rf_oob_score else 'N/A' }}</td>
+                    <td style="padding: 10px 12px;">{{ percent(item.open_set_accuracy) }}</td>
+                    <td style="padding: 10px 12px;">{{ item.admdp_transitions }} 筆 ({{ item.admdp_states }} 狀態)</td>
+                    <td style="padding: 10px 12px; text-align: center;">
+                      {% if item.badge %}
+                        <span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;
+                          {% if item.is_latest %}background: #0f4c81; color: #ffffff;
+                          {% elif item.is_best_f1 %}background: #146c43; color: #ffffff;
+                          {% else %}background: #e2e8f0; color: #475569;{% endif %}">
+                          {{ item.badge }}
+                        </span>
+                      {% else %}
+                        <span style="color: var(--muted);">-</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div style="padding: 20px; text-align: center; background: var(--bg); border-radius: 6px; color: var(--muted); font-size: 13px;">
+            尚未生成歷代評估數據，點擊「⚡ 重新評估歷代模型」開始計算。
+          </div>
+        {% endif %}
+      </section>
     </main>
 
     <script>
@@ -467,7 +546,9 @@ PAGE_TEMPLATE = """
           let title = '資料處理中，請稍候...';
           if (submitter) {
             const val = submitter.value;
-            if (val === 'all') {
+            if (val === 'history') {
+              title = '歷代 AI 模型表現評估與數據演進計算中...';
+            } else if (val === 'all') {
               title = '全套 AI 模型一體化訓練中...';
             } else if (val === 'rf') {
               title = '主模型 RF-MCPR 訓練中...';
@@ -672,6 +753,19 @@ def train_from_csv():
     )
 
 
+@app.post("/evaluate-history")
+def evaluate_history():
+    try:
+        results = evaluate_historical_models(force_recompute=True)
+        return render_page(
+            history_results=results,
+            trained_msg="✅ 歷代 AI 模型表現評估完成！",
+            mode="history_eval",
+        )
+    except Exception as exc:
+        return render_page(error=f"評估歷代模型失敗：{exc}", mode="history_eval")
+
+
 def render_page(
     error: str = "",
     result=None,
@@ -683,6 +777,7 @@ def render_page(
     open_set_training=None,
     admdp_trained: bool = False,
     trained_msg: str = "",
+    history_results: list[dict] | None = None,
     mode: str = "",
 ):
     summary = {
@@ -700,6 +795,13 @@ def render_page(
         reports = result.sheet_reports
         warnings = result.warnings
 
+    if history_results is None:
+        try:
+            history_results = evaluate_historical_models(force_recompute=False)
+        except Exception as e:
+            print("⚠️ 自動讀取歷代模型評估快取提醒:", e)
+            history_results = []
+
     return render_template_string(
         PAGE_TEMPLATE,
         error=error,
@@ -714,6 +816,7 @@ def render_page(
         open_set_training=open_set_training,
         admdp_trained=admdp_trained,
         trained_msg=trained_msg,
+        history_results=history_results,
         mode=mode,
         percent=percent,
         width_pct=width_pct,

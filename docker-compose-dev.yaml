@@ -68,6 +68,7 @@ services:
             MODEL_PREDICT_MODEL_DIR: /shared/model_predict/model
         volumes:
             - ./train_model/outputs:/app/outputs
+            - ./train_model/row_data:/app/row_data
             - ./model_predict/data:/shared/model_predict/data
             - ./model_predict/model:/shared/model_predict/model
         networks:

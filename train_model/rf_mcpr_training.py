@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import joblib
+import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support, precision_score, recall_score
@@ -199,10 +200,42 @@ def evaluate_model(
             }
         )
 
+    # 計算 Top-3 命中率 (現場實用度指標)
+    top3_hit = 0
+    if hasattr(model, "predict_proba") and len(y_test) > 0:
+        probs = model.predict_proba(x_test)
+        for i, y_true_val in enumerate(y_test):
+            top3_local_indices = np.argsort(probs[i])[-3:]
+            top3_global_indices = model.classes_[top3_local_indices]
+            if y_true_val in top3_global_indices:
+                top3_hit += 1
+        top3_accuracy = float(top3_hit / len(y_test))
+    else:
+        top3_accuracy = float(accuracy_score(y_test, y_pred))
+
+    # 計算袋外評估分 (OOB Score)
+    oob_score_val = None
+    try:
+        oob_clf = RandomForestClassifier(
+            n_estimators=n_estimators,
+            random_state=random_state,
+            class_weight="balanced_subsample",
+            oob_score=True,
+            bootstrap=True,
+        )
+        x_all = onehot_encoder.fit_transform(data[[FEATURE_COL]])
+        y_all = label_encoder.transform(data[TARGET_COL])
+        oob_clf.fit(x_all, y_all)
+        oob_score_val = float(oob_clf.oob_score_)
+    except Exception:
+        pass
+
     class_metrics.sort(key=lambda item: (-item["support"], item["label"]))
 
     metrics = {
         "accuracy": float(accuracy_score(y_test, y_pred)),
+        "top3_accuracy": top3_accuracy,
+        "oob_score": oob_score_val,
         "precision_weighted": float(precision_score(y_test, y_pred, average="weighted", zero_division=0)),
         "recall_weighted": float(recall_score(y_test, y_pred, average="weighted", zero_division=0)),
         "f1_weighted": float(f1_score(y_test, y_pred, average="weighted", zero_division=0)),
