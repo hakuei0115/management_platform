@@ -42,7 +42,7 @@ router.beforeEach((to, from, next) => {
   }
 
   // 非管理員進帳號管理 → 回首頁
-  if (to.meta.adminOnly && auth.user.role !== 'admin') {
+  if (to.meta.adminOnly && auth.user?.role !== 'admin') {
     Swal.fire({
       icon: 'error',
       title: '權限不足',

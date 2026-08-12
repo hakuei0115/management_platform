@@ -34,29 +34,29 @@
 
         <!-- 主表格（僅 50 筆 FIFO） -->
         <el-table :data="rows" border stripe height="70vh" :loading="loading" row-class-name="tableRowClass">
-            <el-table-column prop="id" label="序號" width="100" />
-            <el-table-column prop="timestamp" label="時間" width="180">
+            <el-table-column prop="id" label="序號" width="80" align="center" header-align="center" />
+            <el-table-column prop="timestamp" label="時間" width="165" align="center" header-align="center">
                 <template #default="{ row }">
                     {{ formatTime(row.timestamp) }}
                 </template>
             </el-table-column>
-            <el-table-column prop="station_no" label="站點" width="100" />
-            <el-table-column prop="product_spec" label="產品型號" width="160" />
+            <el-table-column prop="station_no" label="站點" width="80" align="center" header-align="center" />
+            <el-table-column prop="product_spec" label="產品型號" width="120" align="center" header-align="center" />
 
-            <el-table-column label="NG 項" width="160">
+            <el-table-column label="NG 項" width="130" align="center" header-align="center">
                 <template #default="{ row }">
-                    <el-tag v-for="item in row.ng_items" :key="item" size="small" type="danger">{{ item }}</el-tag>
+                    <el-tag v-for="item in row.ng_items" :key="item" size="small" type="danger" style="margin: 2px;">{{ item }}</el-tag>
                     <el-tag v-if="row.ng_items.length === 0" size="small" type="success">OK</el-tag>
                 </template>
             </el-table-column>
 
-            <el-table-column label="維修建議">
+            <el-table-column label="維修建議" align="center" header-align="center">
                 <template #default="{ row }">
                     <div v-html="formatSuggestion(row.suggestion)" />
                 </template>
             </el-table-column>
 
-            <el-table-column prop="part" label="可能部位" />
+            <el-table-column prop="part" label="可能部位" width="130" align="center" header-align="center" />
         </el-table>
 
     </el-card>

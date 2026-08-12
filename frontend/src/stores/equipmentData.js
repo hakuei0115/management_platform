@@ -24,10 +24,26 @@ export const useEquipmentDataStore = defineStore('equipmentData', () => {
         }
     }
 
+    async function fetchExportAllData(filterParams) {
+        loading.value = true
+        error.value = null
+        try {
+            const res = await EquipmentDataAPI.fetchExportAllData(filterParams);
+            return res;
+        } catch (err) {
+            console.error('fetchExportAllData error:', err)
+            error.value = err.message || '無法取得全量匯出數據'
+            throw error.value
+        } finally {
+            loading.value = false
+        }
+    }
+
     return {
         equipmentDataList,
         loading,
         error,
-        fetchEquipmentData
+        fetchEquipmentData,
+        fetchExportAllData
     }
 })

@@ -5,8 +5,6 @@ export const StationAPI = {
         try {
             const res = await api.get(`/equipments/${equipmentId}/stations`);
 
-            console.log(res);
-
             if (res.data.success) {
                 return res.data.data;
             } else {

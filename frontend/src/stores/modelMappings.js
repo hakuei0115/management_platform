@@ -56,10 +56,7 @@ export const useModelMappingsStore = defineStore('modelMappings', () => {
             const response = await ModelMappingsAPI.updateModelMapping(equipmentId, mappingId, payload);
 
             if (response.success) {
-                const index = modelMappings.value[equipmentId].findIndex(item => item.id === mappingId);
-                if (index !== -1) {
-                    modelMappings.value[equipmentId][index] = payload;
-                }
+                await fetchModelMappings(equipmentId);
             } else {
                 throw new Error(response.message || '更新模型對照表失敗');
             }

@@ -4,8 +4,18 @@ import { jwtDecode } from 'jwt-decode'
 import { AuthAPI } from '@/services/api'
 
 export const useAuthStore = defineStore('auth', () => {
+    function safeDecode(t) {
+        if (!t) return {}
+        try {
+            return jwtDecode(t)
+        } catch {
+            sessionStorage.removeItem('token')
+            return {}
+        }
+    }
+
     const token = ref(sessionStorage.getItem('token') || '')
-    const user = ref(token.value ? jwtDecode(token.value) : {})
+    const user = ref(safeDecode(token.value))
 
     const isLoggedIn = computed(() => !!token.value)
 

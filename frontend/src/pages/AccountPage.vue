@@ -5,14 +5,14 @@
         </div>
 
         <el-table :data="userStore.userList" border stripe style="width: 100%" row-class-name="tableRowClass">
-            <el-table-column prop="name" label="姓名" width="80" />
-            <el-table-column prop="email" label="Email" />
-            <el-table-column prop="role" label="角色" width="120">
+            <el-table-column prop="name" label="姓名" width="120" align="center" header-align="center" />
+            <el-table-column prop="email" label="Email" align="center" header-align="center" />
+            <el-table-column prop="role" label="角色" width="120" align="center" header-align="center">
                 <template #default="{ row }">
                     <el-tag :type="row.role_name === 'admin' ? 'danger' : 'info'">{{ row.role_name }}</el-tag>
                 </template>
             </el-table-column>
-            <el-table-column label="操作" width="220">
+            <el-table-column label="操作" width="220" align="center" header-align="center">
                 <template #default="{ row }">
                     <el-button size="small" @click="openForm(row)">編輯</el-button>
                     <el-popconfirm title="確定刪除此使用者？" @confirm="deleteUser(row.id)">

@@ -371,11 +371,11 @@ def predict():
         logging.error(error_msg)
         return jsonify({
             "success": False,
-            "error": str(e),
-            "traceback": error_msg
+            "message": "模型推論發生內部錯誤，請檢查系統日誌"
         }), 500
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("MODEL_PREDICT_PORT", "5001"))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    debug_mode = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
+    app.run(host="0.0.0.0", port=port, debug=debug_mode)

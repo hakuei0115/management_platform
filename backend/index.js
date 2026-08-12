@@ -12,9 +12,9 @@ import equipmentDataRouter from "./routes/equipmentDataRouter.js";
 dotenv.config();
 const app = express();
 
-// 允許跨域請求（前端才能呼叫 API）
+const allowedOrigin = process.env.CORS_ORIGIN || "*";
 app.use(cors({
-    origin: "*",          // 可以改成前端實際網址，如 http://localhost:5173
+    origin: allowedOrigin === "*" ? "*" : allowedOrigin.split(",").map(s => s.trim()),
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"]
 }));

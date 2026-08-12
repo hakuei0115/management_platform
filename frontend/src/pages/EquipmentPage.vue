@@ -12,38 +12,60 @@
             @expand-change="getStations" row-class-name="tableRowClass">
             <el-table-column type="expand">
                 <template #default="{ row }">
-                    <div class="station-header">
-                        <h4>{{ row.name }} - 站點清單</h4>
-                        <el-button size="small" type="success" @click="addStation(row)">新增站點</el-button>
+                    <div class="station-expand-box">
+                        <div class="station-header-bar">
+                            <div class="header-info">
+                                <span class="device-title-tag">{{ row.name }}</span>
+                                <span class="sub-title">站點控制清單</span>
+                                <el-tag size="small" type="info" effect="light" round class="stat-tag">
+                                    全部 {{ (stationStore.stationMap[row.id] || []).length }} 站
+                                </el-tag>
+                                <el-tag size="small" type="success" effect="light" round class="stat-tag">
+                                    已啟用 {{ (stationStore.stationMap[row.id] || []).filter(s => s.enabled === 1).length }} 站
+                                </el-tag>
+                            </div>
+                            <el-button size="small" type="success" plain @click="addStation(row)">
+                                + 新增站點
+                            </el-button>
+                        </div>
+
+                        <!-- 站點卡片網格 -->
+                        <div v-if="stationStore.stationMap[row.id] && stationStore.stationMap[row.id].length" class="station-grid">
+                            <div v-for="station in stationStore.stationMap[row.id]" :key="station.id" class="station-card">
+                                <div class="card-left">
+                                    <span class="status-dot" :class="{ active: station.enabled === 1 }"></span>
+                                    <span class="station-name">站點 {{ station.id }}</span>
+                                </div>
+                                <div class="card-right">
+                                    <el-switch v-model="station.enabled" :active-value="1" :inactive-value="0"
+                                        active-text="啟用" inactive-text="停用" inline-prompt size="small"
+                                        @click="updateStation(row, station)" />
+                                    <el-popconfirm title="確定刪除此站點？" @confirm="deleteStation(row, station)">
+                                        <template #reference>
+                                            <el-button size="small" type="danger" plain circle class="delete-icon-btn">
+                                                ✕
+                                            </el-button>
+                                        </template>
+                                    </el-popconfirm>
+                                </div>
+                            </div>
+                        </div>
+
+                        <el-empty v-else description="尚無配置站點，點擊上方按鈕新增" :image-size="60" class="empty-box" />
                     </div>
-                    <el-table :data="stationStore.stationMap[row.id]" size="small" border>
-                        <el-table-column prop="id" label="站點" width="100" />
-                        <el-table-column prop="enabled" label="啟用" width="100">
-                            <template #default="{ row: station }">
-                                <el-switch v-model="station.enabled" :active-value="1" :inactive-value="0"
-                                    @click="updateStation(row, station)" />
-                            </template>
-                        </el-table-column>
-                        <el-table-column label="操作" width="100">
-                            <template #default="{ row: station }">
-                                <el-button size="small" type="danger"
-                                    @click="deleteStation(row, station)">刪除</el-button>
-                            </template>
-                        </el-table-column>
-                    </el-table>
                 </template>
             </el-table-column>
 
-            <el-table-column prop="equipment_code" label="設備代號" width="140" />
-            <el-table-column prop="name" label="名稱" />
-            <el-table-column prop="install_location" label="位置" width="120" />
-            <el-table-column prop="status" label="狀態" width="120">
+            <el-table-column prop="equipment_code" label="設備代號" width="140" align="center" header-align="center" />
+            <el-table-column prop="name" label="名稱" align="center" header-align="center" />
+            <el-table-column prop="install_location" label="位置" width="140" align="center" header-align="center" />
+            <el-table-column prop="status" label="狀態" width="120" align="center" header-align="center">
                 <template #default="{ row }">
                     <el-tag :type="statusColor(row.status)">{{ row.status }}</el-tag>
                 </template>
             </el-table-column>
 
-            <el-table-column label="操作" width="260">
+            <el-table-column label="操作" width="260" align="center" header-align="center">
                 <template #default="{ row }">
                     <el-button size="small" type="primary" @click="openForm(row)">編輯</el-button>
                     <el-button size="small" type="info" @click="openModelDrawer(row)">型號對照表</el-button>
@@ -59,16 +81,16 @@
         <!-- 型號對照表 Drawer -->
         <el-drawer v-model="drawerVisible" :title="activeDevice ? `型號對照表 - ${activeDevice.name}` : '型號對照表'" size="45%">
             <el-table :data="modelMappingsStore.modelMappings[activeDevice?.id] || []" border stripe height="70vh">
-                <el-table-column prop="channel" label="配方頻道" width="120" />
+                <el-table-column prop="channel" label="配方頻道" width="120" align="center" header-align="center" />
 
-                <el-table-column label="型號">
+                <el-table-column label="型號" align="center" header-align="center">
                     <template #default="{ row }">
                         <el-input v-if="row.editable" v-model="row.model_name" placeholder="輸入產品型號" size="small" />
                         <span v-else>{{ row.model_name }}</span>
                     </template>
                 </el-table-column>
 
-                <el-table-column label="操作" width="200">
+                <el-table-column label="操作" width="200" align="center" header-align="center">
                     <template #default="{ row }">
                         <el-button v-if="!row.editable" size="small" type="primary" @click="row.editable = true">
                             編輯
@@ -125,13 +147,6 @@
                 </el-form-item>
                 <el-form-item label="位置" prop="install_location">
                     <el-input v-model="form.install_location" />
-                </el-form-item>
-                <el-form-item label="狀態" prop="status">
-                    <el-select v-model="form.status">
-                        <el-option label="running" value="running" />
-                        <el-option label="offline" value="offline" />
-                        <el-option label="standby" value="standby" />
-                    </el-select>
                 </el-form-item>
             </el-form>
             <template #footer>
@@ -393,7 +408,7 @@ function statusColor(status) {
 }
 
 // 表單邏輯
-const form = ref({ equipment_code: '', name: '', install_location: '', status: 'running' })
+const form = ref({ equipment_code: '', name: '', install_location: '' })
 const rules = {
     equipment_code: [{ required: true, message: '必填', trigger: 'blur' }],
     name: [{ required: true, message: '必填', trigger: 'blur' }],
@@ -401,7 +416,7 @@ const rules = {
 }
 function openForm(device = null) {
     editingDevice.value = device
-    form.value = device ? { ...device } : { equipment_code: '', name: '', install_location: '', status: 'running' }
+    form.value = device ? { equipment_code: device.equipment_code, name: device.name, install_location: device.install_location } : { equipment_code: '', name: '', install_location: '' }
     dialogVisible.value = true
 }
 async function submitForm() {
@@ -438,11 +453,111 @@ async function removeDevice(id) {
     margin-bottom: 12px;
 }
 
-.station-header {
+.station-expand-box {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin: 8px 12px;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.station-header-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 6px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.header-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.device-title-tag {
+    font-weight: 700;
+    font-size: 15px;
+    color: #1e293b;
+}
+
+.sub-title {
+    font-size: 13px;
+    color: #64748b;
+    margin-right: 4px;
+}
+
+.stat-tag {
+    font-weight: 500;
+}
+
+.station-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.station-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.station-card:hover {
+    border-color: #94a3b8;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    transform: translateY(-1px);
+}
+
+.card-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.station-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: #334155;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #cbd5e1;
+    display: inline-block;
+    transition: background-color 0.3s ease;
+}
+
+.status-dot.active {
+    background-color: #22c55e;
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+}
+
+.card-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.delete-icon-btn {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    font-size: 11px;
+}
+
+.empty-box {
+    padding: 12px 0;
 }
 
 .el-table th,

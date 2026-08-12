@@ -3,7 +3,8 @@ import api from './axiosInstance';
 export const ModelPredictAPI = {
     async predictModel(ng_items, station_id = 'default_station', leak_values = {}) {
         try {
-            const res = await api.post('http://localhost:5001/predict', {
+            const targetUrl = import.meta.env.VITE_MODEL_API_URL || '/model/predict';
+            const res = await api.post(targetUrl, {
                 ng_items,
                 station_id,
                 leak_values

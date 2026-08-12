@@ -48,13 +48,17 @@ export function translateRecord(data) {
         }
 
         // === 各測試項目轉譯 ===
-        const decodeLeak = (judgeAddr, leakL, leakH, hi, lo, diffL, diffH) => ({
-            judge: String.fromCharCode(data[judgeAddr]) || "",
-            leak: (combineHL(data[leakH], data[leakL]) / 1000).toFixed(3),
-            hi: signed16ToValue(data[hi], 10),
-            lo: signed16ToValue(data[lo], 10),
-            diff: (combineHL(data[diffH], data[diffL]) / 1000).toFixed(3),
-        });
+        const decodeLeak = (judgeAddr, leakL, leakH, hi, lo, diffL, diffH) => {
+            const rawChar = data[judgeAddr];
+            const judge = (rawChar && rawChar > 0) ? String.fromCharCode(rawChar) : "";
+            return {
+                judge,
+                leak: (combineHL(data[leakH], data[leakL]) / 1000).toFixed(3),
+                hi: signed16ToValue(data[hi], 10),
+                lo: signed16ToValue(data[lo], 10),
+                diff: (combineHL(data[diffH], data[diffL]) / 1000).toFixed(3),
+            };
+        };
 
         const M04 = decodeLeak("D020", "D021", "D022", "D023", "D024", "D025", "D026");
         const M05 = decodeLeak("D028", "D029", "D030", "D031", "D032", "D033", "D034");

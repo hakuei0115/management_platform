@@ -63,13 +63,13 @@ router.post("/equipments", verifyToken, requireRole("admin"), async (req, res) =
 router.put("/equipments/:id", verifyToken, requireRole("admin"), async (req, res) => {
     try {
         const equipmentId = req.params.id;
-        const { equipment_code, name, install_location, status } = req.body;
+        const { equipment_code, name, install_location } = req.body;
 
         if (!equipment_code || !name || !install_location) {
             return res.status(400).json({ success: false, message: "缺少必要欄位" });
         }
 
-        const [result] = await pool.query("UPDATE equipments SET equipment_code = ?, name = ?, install_location = ?, status = ? WHERE id = ?", [equipment_code, name, install_location, status, equipmentId]);
+        const [result] = await pool.query("UPDATE equipments SET equipment_code = ?, name = ?, install_location = ? WHERE id = ?", [equipment_code, name, install_location, equipmentId]);
 
         if (result.affectedRows === 0) {
             return res.status(404).json({ success: false, message: "設備未找到" });

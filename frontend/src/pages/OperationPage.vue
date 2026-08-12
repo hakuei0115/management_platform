@@ -24,45 +24,56 @@
           <el-button type="primary" @click="applyFilter">查詢</el-button>
           <el-button type="warning" plain @click="showOnlyNG">只看NG</el-button>
           <el-button @click="resetFilter">重置</el-button>
-          <el-button type="success" @click="exportExcel">匯出 Excel</el-button>
+          
+          <el-dropdown @command="handleExportCommand" style="margin-left: 12px;">
+            <el-button type="success">
+              匯出 Excel <span style="margin-left: 4px; font-size: 11px;">▼</span>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="currentPage">匯出當前頁面 (第 {{ currentPage }} 頁)</el-dropdown-item>
+                <el-dropdown-item command="allData">匯出符合條件全部資料 (共 {{ total }} 筆)</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+
+          <el-popover trigger="click" width="260">
+            <template #reference>
+              <el-button style="margin-left: 12px;">欄位設定</el-button>
+            </template>
+
+            <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+              <el-button size="small" type="primary" plain @click="selectAllColumns">全選</el-button>
+              <el-button size="small" type="danger" plain @click="clearAllColumns">全取消</el-button>
+            </div>
+
+            <el-checkbox-group v-model="visibleColumns" class="col-setting">
+              <el-checkbox v-for="col in allColumns" :key="col.prop" :label="col.prop">
+                {{ col.label }}
+              </el-checkbox>
+            </el-checkbox-group>
+          </el-popover>
         </el-form-item>
-
-        <el-popover trigger="click" placement="bottom-end" width="260">
-          <template #reference>
-            <el-button icon="el-icon-setting">欄位設定</el-button>
-          </template>
-
-          <div style="display: flex; gap: 6px; margin-bottom: 8px;">
-            <el-button size="small" type="primary" plain @click="selectAllColumns">全選</el-button>
-            <el-button size="small" type="danger" plain @click="clearAllColumns">全取消</el-button>
-          </div>
-
-          <el-checkbox-group v-model="visibleColumns" class="col-setting">
-            <el-checkbox v-for="col in allColumns" :key="col.prop" :label="col.prop">
-              {{ col.label }}
-            </el-checkbox>
-          </el-checkbox-group>
-        </el-popover>
       </el-form>
     </div>
 
     <!-- 資料表 -->
     <el-table :data="rows" border stripe height="70vh" row-class-name="tableRowClass">
-      <el-table-column prop="id" label="序號" width="80" fixed="left" />
+      <el-table-column prop="id" label="序號" width="80" fixed="left" align="center" header-align="center" />
 
-      <el-table-column v-if="visibleColumns.includes('timestamp')" prop="timestamp" label="時間" width="180" sortable :sort-method="(a, b) => new Date(a.timestamp) - new Date(b.timestamp)">
+      <el-table-column v-if="visibleColumns.includes('timestamp')" prop="timestamp" label="時間" width="165" sortable :sort-method="(a, b) => new Date(a.timestamp) - new Date(b.timestamp)" align="center" header-align="center">
         <template #default="{ row }">
           {{ formatTime(row.timestamp) }}
         </template>
       </el-table-column>
-      <el-table-column v-if="visibleColumns.includes('station_no')" prop="station_no" label="站點" width="100" />
-      <el-table-column v-if="visibleColumns.includes('product_spec')" prop="product_spec" label="產品規格" width="120" />
+      <el-table-column v-if="visibleColumns.includes('station_no')" prop="station_no" label="站點" width="80" align="center" header-align="center" />
+      <el-table-column v-if="visibleColumns.includes('product_spec')" prop="product_spec" label="產品規格" width="120" align="center" header-align="center" />
 
       <!-- NG 項 -->
-      <el-table-column label="NG 項" width="160">
+      <el-table-column label="NG 項" width="130" align="center" header-align="center">
         <template #default="{ row }">
           <span v-if="row.ng_items.length">
-            <el-tag v-for="item in row.ng_items" :key="item" type="danger" size="small">{{ item }}</el-tag>
+            <el-tag v-for="item in row.ng_items" :key="item" type="danger" size="small" style="margin: 2px;">{{ item }}</el-tag>
           </span>
           <span v-else>
             <el-tag type="success" size="small">OK</el-tag>
@@ -71,28 +82,27 @@
       </el-table-column>
 
       <!-- 12 個測試欄 -->
-      <el-table-column v-for="col in visibleTestColumns" :key="col.prop" :prop="col.prop" :label="col.label" width="200">
+      <el-table-column v-for="col in visibleTestColumns" :key="col.prop" :prop="col.prop" :label="col.label" width="110" align="center" header-align="center">
         <template #default="{ row }">
-          <el-tag v-if="row[col.prop].includes('不測試') || row[col.prop].includes('未測試')" type="info">{{ row[col.prop]
-          }}</el-tag>
+          <el-tag v-if="row[col.prop].includes('不測試') || row[col.prop].includes('未測試')" type="info">{{ row[col.prop] }}</el-tag>
           <el-tag v-else-if="row[col.prop].includes('NG')" type="danger">{{ row[col.prop] }}</el-tag>
           <el-tag v-else type="success">{{ row[col.prop] }}</el-tag>
         </template>
       </el-table-column>
 
       <!-- 洩漏量欄位 -->
-      <el-table-column v-if="visibleLeakColumns.length" label="洩漏量" align="center">
-        <el-table-column v-for="col in visibleLeakColumns" :key="col.prop" :prop="col.prop" :label="col.label" width="180" />
+      <el-table-column v-if="visibleLeakColumns.length" label="洩漏量" align="center" header-align="center">
+        <el-table-column v-for="col in visibleLeakColumns" :key="col.prop" :prop="col.prop" :label="col.label" width="110" align="center" header-align="center" />
       </el-table-column>
 
       <!-- 維修建議與可能部位 -->
-      <el-table-column label="維修建議" prop="suggestion" width="160">
+      <el-table-column label="維修建議" prop="suggestion" min-width="180" align="center" header-align="center">
         <template #default="{ row }">
           <div v-html="formatSuggestion(row.suggestion)"></div>
         </template>
       </el-table-column>
 
-      <el-table-column label="可能部位" prop="part" width="140" />
+      <el-table-column label="可能部位" prop="part" width="130" align="center" header-align="center" />
     </el-table>
 
     <!-- 分頁 -->
@@ -313,39 +323,113 @@ function clearAllColumns() {
   visibleColumns.value = []
 }
 
-function exportExcel() {
-  if (!rows.value.length) {
-    ElMessage.warning("沒有可匯出的資料")
+async function handleExportCommand(command) {
+  if (command === 'currentPage') {
+    if (!rows.value.length) {
+      ElMessage.warning('沒有可匯出的當頁資料')
+      return
+    }
+    exportRows(rows.value, `檢測紀錄_第${currentPage.value}頁`)
+  } else if (command === 'allData') {
+    if (total.value === 0) {
+      ElMessage.warning('沒有可匯出的資料')
+      return
+    }
+
+    const loadingMsg = ElMessage.info({
+      message: `正在下載符合條件的全部資料 (${total.value} 筆)，請稍候...`,
+      duration: 0
+    })
+
+    try {
+      const queryParams = {
+        start_id: filters.value.start_id,
+        end_id: filters.value.end_id,
+        product_spec: filters.value.product_spec,
+        only_ng: filters.value.only_ng,
+      }
+      if (filters.value.range && filters.value.range.length === 2) {
+        queryParams.start_time = filters.value.range[0]
+        queryParams.end_time = filters.value.range[1]
+      }
+
+      const res = await equipmentDataStore.fetchExportAllData(queryParams)
+      const rawRecords = res.records || []
+
+      // 轉換與預測維修建議
+      const translatedRecords = await Promise.all(
+        rawRecords.map(async (row) => {
+          const formattedRow = {
+            id: row.id,
+            timestamp: row.timestamp,
+            station_no: row.station_no,
+            product_spec: row.product_spec,
+            ng_items: row.ng_items || [],
+            ...row,
+          }
+
+          if (!formattedRow.ng_items || formattedRow.ng_items.length === 0) {
+            formattedRow.suggestion = '產品狀態良好，無需維修'
+            formattedRow.part = '無'
+          } else {
+            try {
+              const pred = await ModelPredictAPI.predictModel(formattedRow.ng_items)
+              if (pred) {
+                formattedRow.suggestion = pred.suggestions
+                formattedRow.part = pred.parts
+              }
+            } catch (pErr) {
+              formattedRow.suggestion = '維修建議推論暫不可用'
+              formattedRow.part = '-'
+            }
+          }
+          return formattedRow
+        })
+      )
+
+      loadingMsg.close()
+      exportRows(translatedRecords, `檢測紀錄_全部資料_${total.value}筆`)
+      ElMessage.success(`已成功匯出全部 ${translatedRecords.length} 筆資料！`)
+    } catch (err) {
+      loadingMsg.close()
+      console.error('全量匯出失敗:', err)
+      ElMessage.error('全量匯出失敗，請稍後再試')
+    }
+  }
+}
+
+function exportRows(targetRows, filePrefix = '檢測紀錄') {
+  if (!targetRows || !targetRows.length) {
+    ElMessage.warning('沒有可匯出的資料')
     return
   }
 
-  const exportData = rows.value.map(row => ({
+  const exportData = targetRows.map(row => ({
     序號: row.id,
     時間: formatTime(row.timestamp),
     站點: row.station_no,
     產品規格: row.product_spec,
-    NG項: row.ng_items.join(', ') || 'OK',
+    NG項: Array.isArray(row.ng_items) ? (row.ng_items.join(', ') || 'OK') : (row.ng_items || 'OK'),
     ...Object.fromEntries(
       Object.keys(row)
-        .filter(k => k.startsWith("M") && k.length === 3) // M01 ~ M12
-        .map(k => [k + "_測試結果", row[k]])
+        .filter(k => k.startsWith('M') && k.length === 3) // M01 ~ M12
+        .map(k => [k + '_測試結果', row[k]])
     ),
     ...Object.fromEntries(
       Object.keys(row)
-        .filter(k => k.endsWith("_leak"))
+        .filter(k => k.endsWith('_leak'))
         .map(k => [k, row[k]])
     ),
-    維修建議: row.suggestion,
-    可能部位: row.part,
+    維修建議: row.suggestion || '-',
+    可能部位: row.part || '-',
   }))
 
   const worksheet = XLSX.utils.json_to_sheet(exportData)
-
   const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, "資料列表")
+  XLSX.utils.book_append_sheet(workbook, worksheet, '資料列表')
 
-  const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" })
-  saveAs(new Blob([excelBuffer]), `${dayjs().format("YYYYMMDD_HHmmss")}.xlsx`)
+  const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  saveAs(new Blob([excelBuffer]), `${filePrefix}_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`)
 }
 </script>
 

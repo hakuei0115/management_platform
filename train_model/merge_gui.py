@@ -380,7 +380,7 @@ PAGE_TEMPLATE = """
             
             <div style="margin-top: 18px;">
               <button type="submit" name="train_target" value="all" class="btn-success" style="width: 100%; font-size: 15px;">
-                🚀 一鍵訓練全套 AI 模型 (RF-MCPR + Open-Set + ADMDP)
+                一鍵訓練全套 AI 模型 (RF-MCPR + Open-Set + ADMDP)
               </button>
             </div>
 
@@ -388,9 +388,9 @@ PAGE_TEMPLATE = """
             
             <label>獨立單獨訓練專區：</label>
             <div class="button-row">
-              <button type="submit" name="train_target" value="rf" class="btn-sec">🟢 單獨訓練 RF-MCPR</button>
-              <button type="submit" name="train_target" value="openset" class="btn-sec">🛡️ 單獨訓練 Open-Set 開集識別</button>
-              <button type="submit" name="train_target" value="admdp" class="btn-sec">🔄 單獨訓練 ADMDP 馬可夫決策</button>
+              <button type="submit" name="train_target" value="rf" class="btn-sec">單獨訓練 RF-MCPR</button>
+              <button type="submit" name="train_target" value="openset" class="btn-sec">單獨訓練 Open-Set 開集識別</button>
+              <button type="submit" name="train_target" value="admdp" class="btn-sec">單獨訓練 ADMDP 馬可夫決策</button>
             </div>
           </form>
         </section>
@@ -468,17 +468,17 @@ PAGE_TEMPLATE = """
           if (submitter) {
             const val = submitter.value;
             if (val === 'all') {
-              title = '🚀 全套 AI 模型一體化訓練中...';
+              title = '全套 AI 模型一體化訓練中...';
             } else if (val === 'rf') {
-              title = '🟢 主模型 RF-MCPR 訓練中...';
+              title = '主模型 RF-MCPR 訓練中...';
             } else if (val === 'openset') {
-              title = '🛡️ 開集識別 Open-Set 訓練中...';
+              title = '開集識別 Open-Set 訓練中...';
             } else if (val === 'admdp') {
-              title = '🔄 ADMDP 馬可夫決策鏈訓練中...';
+              title = 'ADMDP 馬可夫決策鏈訓練中...';
             } else if (val === 'dataset') {
-              title = '📁 解析產線紀錄 & 建立全套訓練集...';
+              title = '解析產線紀錄 & 建立全套訓練集...';
             } else if (val === 'merge') {
-              title = '📊 產線原始 Excel 合併中...';
+              title = '產線原始 Excel 合併中...';
             }
           }
           document.getElementById('loadingTitle').innerText = title;
