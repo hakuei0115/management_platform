@@ -1,0 +1,72 @@
+services:
+  frontend:
+    image: ${REGISTRY_PREFIX:-ghcr.io/hakuei0115}/management_platform-frontend:latest
+    container_name: mp_frontend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      - backend
+      - model
+    networks:
+      - mp_net
+
+  backend:
+    image: ${REGISTRY_PREFIX:-ghcr.io/hakuei0115}/management_platform-backend:latest
+    container_name: mp_backend
+    ports:
+      - "3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - mp_net
+
+  model:
+    image: ${REGISTRY_PREFIX:-ghcr.io/hakuei0115}/management_platform-model:latest
+    container_name: mp_model
+    ports:
+      - "${MODEL_PORT:-5001}:5001"
+    environment:
+      MODEL_PREDICT_PORT: 5001
+      MODEL_PATH: /app/model/rf_mcpr.pkl
+      TRAINING_DATA_PATH: /app/data/NG項_最終維修建議對照.csv
+      LOG_DIR: /app/logs
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    volumes:
+      - ./model_predict/data:/app/data
+      - ./model_predict/model:/app/model
+      - ./model_predict/logs:/app/logs
+    depends_on:
+      - redis
+    networks:
+      - mp_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: mp_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - mp_net
+
+  train_model:
+    image: ${REGISTRY_PREFIX:-ghcr.io/hakuei0115}/management_platform-train_model:latest
+    container_name: mp_train_model
+    ports:
+      - "${TRAIN_MODEL_PORT:-8501}:8501"
+    environment:
+      MERGE_GUI_PORT: 8501
+      TRAIN_OUTPUT_DIR: /app/outputs
+      MODEL_PREDICT_DATA_DIR: /shared/model_predict/data
+      MODEL_PREDICT_MODEL_DIR: /shared/model_predict/model
+    volumes:
+      - ./train_model/row_data:/app/row_data
+      - ./train_model/outputs:/app/outputs
+      - ./model_predict/data:/shared/model_predict/data
+      - ./model_predict/model:/shared/model_predict/model
+    networks:
+      - mp_net
+
+networks:
+  mp_net:
+    driver: bridge
