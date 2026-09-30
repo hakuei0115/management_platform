@@ -15,6 +15,14 @@ services:
         container_name: mp_backend
         ports:
             - "3000:3000"
+        environment:
+            PORT: "${PORT:-3000}"
+            DB_HOST: "${DB_HOST:?DB_HOST is required}"
+            DB_PORT: "${DB_PORT:-3306}"
+            DB_USER: "${DB_USER:?DB_USER is required}"
+            DB_PASS: "${DB_PASS:?DB_PASS is required}"
+            DB_NAME: "${DB_NAME:?DB_NAME is required}"
+            JWT_SECRET: "${JWT_SECRET:?JWT_SECRET is required}"
         extra_hosts:
             - "host.docker.internal:host-gateway"
         networks:
@@ -61,6 +69,7 @@ services:
             MODEL_PREDICT_MODEL_DIR: /shared/model_predict/model
         volumes:
             - ./train_model/outputs:/app/outputs
+            - ./train_model/row_data:/app/row_data
             - ./model_predict/data:/shared/model_predict/data
             - ./model_predict/model:/shared/model_predict/model
         networks:
