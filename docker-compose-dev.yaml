@@ -14,14 +14,15 @@ services:
         build: ./backend
         container_name: mp_backend
         ports:
-            - "3000:3000"
+            - "${PORT:-3000}:3000"
         environment:
-            PORT: 3000
-            DB_HOST: mariadb
-            DB_USER: mindman_user
-            DB_PASS: 28925502
-            DB_NAME: mindman
-            JWT_SECRET: dev_jwt_secret
+            PORT: "${PORT:-3000}"
+            DB_HOST: "mariadb"
+            DB_PORT: "${DB_PORT:-3306}"
+            DB_USER: "${DB_USER:?DB_USER is required}"
+            DB_PASS: "${DB_PASS:?DB_PASS is required}"
+            DB_NAME: "${DB_NAME:?DB_NAME is required}"
+            JWT_SECRET: "${JWT_SECRET:?JWT_SECRET is required}"
         depends_on:
             - mariadb
         networks:
@@ -75,13 +76,12 @@ services:
             - mp_net
 
     mariadb:
-        image: mariadb:latest
+        image: mariadb:10.6
         container_name: mp_mariadb
         environment:
-            MYSQL_ROOT_PASSWORD: 28925502
-            MYSQL_DATABASE: mindman
-            MYSQL_USER: mindman_user
-            MYSQL_PASSWORD: 28925502
+            DB_USER: "${DB_USER:?DB_USER is required}"
+            DB_PASS: "${DB_PASS:?DB_PASS is required}"
+            DB_NAME: "${DB_NAME:?DB_NAME is required}"
         ports:
             - "3306:3306"
         volumes:
